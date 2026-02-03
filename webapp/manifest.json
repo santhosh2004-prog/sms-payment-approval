@@ -1,0 +1,171 @@
+{
+  "_version": "1.60.0",
+  "sap.app": {
+    "id": "com.incresol.zpaymentworkflow",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": {
+      "version": "0.0.1"
+    },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "resources": "resources.json",
+    "sourceTemplate": {
+      "id": "@sap/generator-fiori:basic",
+      "version": "1.18.5",
+      "toolsId": "d2665526-9a73-4943-ba0f-fd0909e4196e"
+    },
+    "dataSources": {
+      "mainService": {
+        "uri": "/sap/opu/odata/sap/ZPAYMENT_APPROVAL_SRV/",
+        "type": "OData",
+        "settings": {
+          "annotations": [],
+          "localUri": "localService/mainService/metadata.xml",
+          "odataVersion": "2.0",
+          "useBatch": false
+        }
+      }
+    },
+    "crossNavigation": {
+      "inbounds": {
+        "zpaymentapprovalworkflow-display": {
+          "semanticObject": "zpaymentapprovalworkflow",
+          "action": "display",
+          "title": "{{zpaymentapprovalworkflow-display.flpTitle}}",
+          "signature": {
+            "parameters": {},
+            "additionalParameters": "allowed"
+          }
+        }
+      }
+    }
+  },
+
+  "sap.ui": {
+    "technology": "UI5",
+    "icons": {
+      "icon": "",
+      "favIcon": "",
+      "phone": "",
+      "phone@2": "",
+      "tablet": "",
+      "tablet@2": ""
+    },
+    "deviceTypes": {
+      "desktop": true,
+      "tablet": true,
+      "phone": true
+    }
+  },
+
+  "sap.ui5": {
+    "flexEnabled": true,
+
+    "dependencies": {
+      "minUI5Version": "1.120.14",
+      "libs": {
+        "sap.m": {},
+        "sap.ui.core": {},
+        "sap.ui.table": {},
+        "sap.f": {}
+      }
+    },
+
+    "contentDensities": {
+      "compact": true,
+      "cozy": true
+    },
+
+    "models": {
+      "i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "settings": {
+          "bundleName": "com.incresol.zpaymentworkflow.i18n.i18n"
+        }
+      },
+      "": {
+        "dataSource": "mainService",
+        "preload": true,
+        "settings": {}
+      },
+      "oModel": {
+        "dataSource": "mainService",
+        "preload": true,
+        "settings": {
+          "useBatch": false,
+          "defaultBindingMode": "TwoWay"
+        }
+      }
+    },
+
+    "resources": {
+      "css": [
+        {
+          "uri": "css/style.css"
+        }
+      ]
+    },
+
+    "routing": {
+      "config": {
+        "routerClass": "sap.m.routing.Router",
+        "controlId": "app",
+        "controlAggregation": "pages",
+        "viewType": "XML",
+        "viewPath": "com.incresol.zpaymentworkflow.view",
+        "async": true,
+        "transition": "slide",
+         "bypassed": {
+    "target": "Home"
+  }
+      },
+
+      "routes": [
+        {
+          "pattern": "",
+          "name": "Home",
+          "target": "Home"
+        },
+        {
+          "pattern": "hoAccountsApproval",
+          "name": "HoAccountsApproval",
+          "target": "HoAccountsApproval"
+        },
+        {
+          "pattern": "projectManager",
+          "name": "ProjectManager",
+          "target": "ProjectManager"
+        },
+
+        {
+          "pattern": "cfo",
+          "name": "CFO",
+          "target": "CFO"
+        }
+      ],
+
+      "targets": {
+        "Home": {
+          "viewName": "Home"
+        },
+        "HoAccountsApproval": {
+          "viewName": "HoAccountsApproval"
+        },
+        "ProjectManager": {
+          "viewName": "ProjectManager"
+        },
+         "CFO": {
+          "viewName": "CFO"
+        }
+      }
+    },
+
+    "rootView": {
+      "viewName": "com.incresol.zpaymentworkflow.view.App",
+      "type": "XML",
+      "id": "app",
+      "async": true
+    }
+  }
+}

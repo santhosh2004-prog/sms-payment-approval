@@ -1,0 +1,130 @@
+.approveButton .sapMBtnInner {
+    background-color: #2e7d32 !important; /* strong green */
+    border-color: #1b5e20 !important;
+    color: #ffffff !important;
+}
+
+.approveButton .sapMBtnInner:hover {
+    background-color: #116b1d !important;
+}
+
+.approveButton .sapMBtnInner:active {
+    background-color: #1b5e20 !important;
+}
+
+.approveButton .sapMBtnIcon {
+    color: #ffffff !important;
+}
+
+.rejectButton .sapMBtnInner {
+    background-color: #e60000 !important; /* strong red */
+    border-color: #b30000 !important;
+    color: #ffffff !important;
+}
+
+.rejectButton .sapMBtnInner:hover {
+   border-color: #ebdfdf !important;
+}
+
+.rejectButton .sapMBtnInner:active {
+    background-color: #ae0d0d !important;
+    
+
+}
+
+
+
+
+/* Button Container Styling */
+.buttonContainer {
+    display: flex !important;
+    gap: 12px !important;
+    align-items: center !important;
+}
+
+/* Icon styling for buttons */
+.approveButton .sapMBtnIcon,
+.rejectButton .sapMBtnIcon {
+    font-size: 1.1rem !important;
+    margin-right: 6px !important;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+    .approveButton,
+    .rejectButton {
+        min-width: 100px !important;
+        height: 36px !important;
+        font-size: 0.9rem !important;
+    }
+}
+
+/* Animation for button state changes */
+@keyframes buttonPulse {
+    0% {
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+    }
+    50% {
+        box-shadow: 0 6px 12px rgba(40, 167, 69, 0.5);
+    }
+    100% {
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+    }
+}
+
+.approveButton.pulse {
+    animation: buttonPulse 2s infinite !important;
+}
+
+@keyframes rejectButtonPulse {
+    0% {
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+    }
+    50% {
+        box-shadow: 0 6px 12px rgba(220, 53, 69, 0.5);
+    }
+    100% {
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+    }
+}
+
+.rejectButton.pulse {
+    animation: rejectButtonPulse 2s infinite !important;
+}
+
+/* Toolbar styling to accommodate custom buttons */
+.customButtonToolbar {
+    background: rgba(248, 249, 250, 0.8) !important;
+    border-radius: 8px !important;
+    padding: 8px 16px !important;
+    margin-bottom: 16px !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Selection count badge styling */
+.selectionCountBadge {
+    background: #007bff !important;
+    color: white !important;
+    border-radius: 12px !important;
+    padding: 4px 8px !important;
+    font-size: 0.8rem !important;
+    font-weight: bold !important;
+    margin-left: 8px !important;
+}
+.cancelButton .sapMBtnInner {
+    background-color: #e0e0e0 !important; /* light grey */
+    border-color: #bdbdbd !important;
+    color: #424242 !important; /* dark grey text for contrast */
+}
+
+.cancelButton .sapMBtnInner:hover {
+    background-color: #d5d5d5 !important;
+}
+
+.cancelButton .sapMBtnInner:active {
+    background-color: #bdbdbd !important;
+}
+
+.cancelButton .sapMBtnIcon {
+    color: #424242 !important;
+}

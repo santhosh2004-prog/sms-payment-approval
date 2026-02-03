@@ -1,0 +1,643 @@
+<mvc:View
+    controllerName="com.incresol.zpaymentworkflow.controller.CFO"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:table="sap.ui.table"
+    xmlns:m="sap.m"
+    xmlns:f="sap.f"
+    xmlns:core="sap.ui.core"
+    displayBlock="true"
+    height="100%"
+>
+    <f:DynamicPage id="idPaymentDynamicPage">
+        <!-- ================= TITLE ================= -->
+        <f:title>
+            <f:DynamicPageTitle>
+                <f:heading>
+                    <m:Title text="CFO Payment Approvals" />
+                </f:heading>
+            </f:DynamicPageTitle>
+        </f:title>
+
+        <!-- ================= CONTENT ================= -->
+        <f:content>
+            <m:VBox
+                height="100%"
+                fitContainer="true"
+                class="sapUiContentPadding"
+            >
+                <!-- ================= ACTION BAR ================= -->
+                <m:Toolbar class="sapUiMediumMarginBottom customButtonToolbar">
+                    <!-- Currency Display Switch -->
+                    <m:Label
+                        text="Show in Lakhs:"
+                        class="sapUiTinyMarginEnd"
+                    />
+                    <m:Switch
+                        id="idShowInLakhsSwitch"
+                        state="{viewState>/showInLakhs}"
+                        change="onSwitchShowInLakhsChange"
+                        tooltip="Toggle between Rupees and Lakhs view"
+                    />
+
+                    <!-- Selection Count Display -->
+                    <m:Text
+                        text="{= ${viewState>/selectedCount} > 0 ? ${viewState>/selectedCount} + ' item(s) selected' : ''}"
+                        visible="{viewState>/showBulkActions}"
+                        class="sapUiMediumMarginBegin selectionCountBadge"
+                    />
+
+                    <m:ToolbarSpacer />
+
+                    <!-- Button Container -->
+                    <m:HBox class="buttonContainer">
+                        <m:Button
+                            id="idApproveButton"
+                            text="Approve"
+                            icon="sap-icon://accept"
+                            iconFirst="true"
+                            type="Success"
+                            enabled="{viewState>/showBulkActions}"
+                            press="onApproveButtonPress"
+                            class="approveButton"
+                            tooltip="Approve selected items"
+                        />
+
+                        <m:Button
+                            id="idRejectButton"
+                            text="Reject"
+                            icon="sap-icon://cancel"
+                            iconFirst="true"
+                            type="Reject"
+                            enabled="{viewState>/showBulkActions}"
+                            press="onRejectButtonPress"
+                            class="rejectButton"
+                            tooltip="Reject selected items"
+                        />
+                    </m:HBox>
+                </m:Toolbar>
+
+                <!-- ================= TREE TABLE ================= -->
+                <table:TreeTable
+                    id="idTreeTable"
+                    rows="{path:'treeData>/treeData', parameters:{arrayNames:['children']}}"
+                    selectionMode="MultiToggle"
+                    selectionBehavior="Row"
+                    rowSelectionChange="onTreeTableRowSelectionChange"
+                    fixedColumnCount="4"
+                    enableBusyIndicator="true"
+                    width="100%"
+                    class="sapUiSizeCompact"
+                >
+                    <!-- ================= Approval Note No ================= -->
+                    <table:Column
+                        label="Approval Note No"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>ApprovalNo}"
+                                class="{= ${treeData>isHeader} ? 'sapThemeHighlight-asTextColor' : ''}"
+                                visible="{treeData>isHeader}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Created On (Header) ================= -->
+                    <table:Column
+                        label="Date of Approval Note"
+                        width="140px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
+                                visible="{treeData>isHeader}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Profit Center (Header) ================= -->
+                    <table:Column
+                        label="Profit Center"
+                        width="100px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>ProfitCenter}"
+                                visible="{treeData>isHeader}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Profit Center Name (Header) ================= -->
+                    <table:Column
+                        label="Profit Center Name"
+                        width="150px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>ProfitCenterName}"
+                                visible="{treeData>isHeader}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Vendor Code ================= -->
+                    <table:Column
+                        label="Vendor Code"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text text="{treeData>VendorCode}" />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Vendor Name ================= -->
+                    <table:Column
+                        label="Name of Vendor"
+                        width="220px"
+                    >
+                        <table:template>
+                            <m:Text text="{treeData>VendorName}" />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Liability Head (Item) ================= -->
+                    <table:Column
+                        label="Liability Head (Dropdown)"
+                        width="180px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>LiabHead}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Invoice Number (Item) ================= -->
+                    <table:Column
+                        label="Invoice No."
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>DocNum}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Purchase Order (Item) ================= -->
+                    <table:Column
+                        label="Purchase Order"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>PurchDoc}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Document Number (Item) ================= -->
+                    <table:Column
+                        label="Document Number"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>DocNum}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Document Date (Item) ================= -->
+                    <table:Column
+                        label="Document Date"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{path:'treeData>DocDate', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Posting Date (Item) ================= -->
+                    <table:Column
+                        label="Posting Date"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{path:'treeData>PostingDt', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Gross Amount (Header + Item) ================= -->
+                    <table:Column
+                        label="Gross Amount"
+                        width="130px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:VBox>
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>TotalBaseAmt'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                    visible="{treeData>isHeader}"
+                                    class="sapThemeHighlight-asTextColor"
+                                />
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>BaseAmt'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                    visible="{= !${treeData>isHeader} }"
+                                />
+                            </m:VBox>
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= GST Amount (Header + Item) ================= -->
+                    <table:Column
+                        label="GST Amount"
+                        width="130px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:VBox>
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>TotalGstAmt'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                    visible="{treeData>isHeader}"
+                                    class="sapThemeHighlight-asTextColor"
+                                />
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>GstAmt'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                    visible="{= !${treeData>isHeader} }"
+                                />
+                            </m:VBox>
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= TDS Amount (Header + Item) ================= -->
+                    <table:Column
+                        label="TDS Amount"
+                        width="130px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:VBox>
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>TotalTdsAmount'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                    visible="{treeData>isHeader}"
+                                    class="sapThemeHighlight-asTextColor"
+                                />
+                                <m:Input
+                                    value="{treeData>TdsAmount}"
+                                    visible="{= !${treeData>isHeader} }"
+                                    type="Number"
+                                    placeholder="0.00"
+                                    textAlign="End"
+                                    change="onTdsAmountChange"
+                                    description="₹"
+                                />
+                            </m:VBox>
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Total Liability (Header + Item) ================= -->
+                    <table:Column
+                        label="Total Liability"
+                        width="130px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{parts: [{path: 'treeData>TotalLiability'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Amount Claimed (Header + Item) ================= -->
+                    <table:Column
+                        label="Amount Claimed"
+                        width="130px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:VBox>
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>TotalAmtClaimed'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                    visible="{treeData>isHeader}"
+                                    class="sapThemeHighlight-asTextColor"
+                                />
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>AmtClaimed'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                    visible="{= !${treeData>isHeader} }"
+                                />
+                            </m:VBox>
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= GST Amount reflected in GSTR 2A ================= -->
+                    <table:Column
+                        label="GST Amount reflected in GSTR 2A"
+                        width="150px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{parts: [{path: 'treeData>Gst2aRef'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= GST Amount not reflected in GSTR 2A ================= -->
+                    <table:Column
+                        label="GST Amount not reflected in GSTR 2A"
+                        width="150px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{parts: [{path: 'treeData>Gst2aNref'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Amount already claimed in approval notes ================= -->
+                    <table:Column
+                        label="Amount already claimed in approval notes"
+                        width="180px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{parts: [{path: 'treeData>AmtClaimed'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Approval notes Pr. Ref ================= -->
+                    <table:Column
+                        label="Approval notes Pr. Ref"
+                        width="150px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>AprnoRef}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Amount proposed to be paid ================= -->
+                    <table:Column
+                        label="Amount proposed to be paid"
+                        width="150px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{parts: [{path: 'treeData>ProposedAmt'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Amount approved by Project Manager ================= -->
+                    <table:Column
+                        label="Amount approved by Project Manager"
+                        width="180px"
+                        hAlign="End"
+                    >
+                        <table:template>
+                            <m:Input
+                                value="{treeData>PmApprAmt}"
+                                visible="{= !${treeData>isHeader} }"
+                                type="Number"
+                                placeholder="0.00"
+                                textAlign="End"
+                                change="onPmApprAmountChange"
+                                description="₹"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= PM Status (Header=OverallStatus, Item=PmApprStatus) ================= -->
+                    <table:Column
+                        label="PM Status"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:ObjectStatus
+                                text="{= ${treeData>isHeader} ? ${treeData>OverallStatus} : ${treeData>PmApprStatus} }"
+                                state="{path:'treeData>OverallStatus', formatter:'.formatter.statusState'}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= PM Remark (Item) ================= -->
+                    <table:Column
+                        label="PM Remark"
+                        width="200px"
+                    >
+                        <table:template>
+                            <m:Input
+                                value="{treeData>PmApprRemarks}"
+                                visible="{= !${treeData>isHeader} }"
+                                placeholder="Enter remarks..."
+                                maxLength="255"
+                                change="onRemarksChange"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Bank Name (Item) ================= -->
+                    <table:Column
+                        label="Bank Name"
+                        width="200px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>BankName}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Account Number (Item) ================= -->
+                    <table:Column
+                        label="Account Number"
+                        width="160px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>AccountNumber}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Currency (Header + Item) ================= -->
+                    <table:Column
+                        label="Currency"
+                        width="80px"
+                    >
+                        <table:template>
+                            <m:Text text="{treeData>Currency}" />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Company Code (Header) ================= -->
+                    <table:Column
+                        label="Company Code"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>CompanyCode}"
+                                visible="{treeData>isHeader}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Created By (Header) ================= -->
+                    <table:Column
+                        label="Created By"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>CreatedBy}"
+                                visible="{treeData>isHeader}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Creation Time (Header) ================= -->
+                    <table:Column
+                        label="Creation Time"
+                        width="140px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{path:'treeData>CreatedAt', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy HH:mm:ss'}}"
+                                visible="{treeData>isHeader}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Item Count (Header) ================= -->
+                    <table:Column
+                        label="Item Count"
+                        width="100px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>ItemCount}"
+                                visible="{treeData>isHeader}"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Tax Number (Item) ================= -->
+                    <table:Column
+                        label="Tax Number"
+                        width="120px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>TaxNum}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Bank Key (Item) ================= -->
+                    <table:Column
+                        label="Bank Key"
+                        width="100px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>BankKey}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Reference Document (Item) ================= -->
+                    <table:Column
+                        label="Reference Document"
+                        width="150px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>ReferenceDoc}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= GSTR1 Details (Item) ================= -->
+                    <table:Column
+                        label="GSTR1 Details"
+                        width="150px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>Gstr1Details}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= General Remark (Item) ================= -->
+                    <table:Column
+                        label="General Remark"
+                        width="200px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>Remark}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Account Holder (Item) ================= -->
+                    <table:Column
+                        label="Account Holder"
+                        width="180px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>AccountHolder}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+                    <!-- ================= Branch (Item) ================= -->
+                    <table:Column
+                        label="Branch"
+                        width="150px"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>Branch}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+                </table:TreeTable>
+            </m:VBox>
+        </f:content>
+    </f:DynamicPage>
+</mvc:View>

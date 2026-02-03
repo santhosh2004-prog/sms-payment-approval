@@ -1,0 +1,114 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+>
+    <Dialog
+        title="{dialogModel>/title}"
+        contentWidth="700px"
+        contentHeight="600px"
+        resizable="true"
+        draggable="true"
+        afterClose="onDialogAfterClose"
+    >
+        <content>
+            <VBox class="sapUiMediumMargin">
+                <!-- Selected Items Count -->
+                <Label
+                    text="Selected Items ({dialogModel>/itemCount}):"
+                    class="sapUiMediumMarginBottom"
+                />
+
+                <!-- Items Table -->
+                <Table
+                    width="100%"
+                    mode="None"
+                    class="sapUiMediumMarginBottom"
+                    growing="true"
+                    growingThreshold="5"
+                    items="{dialogModel>/selectedItems}"
+                >
+                    <columns>
+                        <Column>
+                            <Text text="Approval No" />
+                        </Column>
+                        <Column>
+                            <Text text="Vendor" />
+                        </Column>
+                        <Column>
+                            <Text text="Amount" />
+                        </Column>
+                        <Column>
+                            <Text text="Status" />
+                        </Column>
+                    </columns>
+
+                    <items>
+                        <ColumnListItem>
+                            <cells>
+                                <Text text="{dialogModel>ApprovalNo}" />
+                                <Text text="{dialogModel>VendorName}" />
+
+                                <Text
+                                    text="{
+                                        parts: [
+                                            { path: 'dialogModel>isHeader' },
+                                            { path: 'dialogModel>TotalBaseAmt' },
+                                            { path: 'dialogModel>BaseAmt' },
+                                            { path: 'dialogModel>Currency' }
+                                        ],
+                                        formatter: '.formatDialogAmount'
+                                    }"
+                                />
+
+                                <ObjectStatus
+                                    text="{
+                                        parts: [
+                                            { path: 'dialogModel>isHeader' },
+                                            { path: 'dialogModel>OverallStatus' },
+                                            { path: 'dialogModel>PmApprStatus' }
+                                        ],
+                                        formatter: '.formatDialogStatusText'
+                                    }"
+                                    state="{
+                                        parts: [
+                                            { path: 'dialogModel>isHeader' },
+                                            { path: 'dialogModel>OverallStatus' },
+                                            { path: 'dialogModel>PmApprStatus' }
+                                        ],
+                                        formatter: '.formatDialogStatusState'
+                                    }"
+                                />
+                            </cells>
+                        </ColumnListItem>
+                    </items>
+                </Table>
+            </VBox>
+        </content>
+
+        <buttons>
+            <!-- Confirm (Approve / Reject) Button -->
+            <Button
+                id="idConfirmButton"
+                text="{dialogModel>/actionType}"
+                icon="{= ${dialogModel>/actionType} === 'Reject' ? 'sap-icon://decline' : 'sap-icon://accept' }"
+                iconFirst="true"
+                type="{= ${dialogModel>/actionType} === 'Reject' ? 'Reject' : 'Success' }"
+                press="handleDialogConfirm"
+                class="{= ${dialogModel>/actionType} === 'Reject' ? 'rejectButton' : 'approveButton' }"
+                tooltip="{= ${dialogModel>/actionType} === 'Reject' ? 'Reject selected items' : 'Approve selected items' }"
+            />
+
+            <!-- Cancel Button -->
+            <Button
+                id="idCancelButton"
+                text="Cancel"
+                icon="sap-icon://cancel"
+                iconFirst="true"
+                type="Neutral"
+                press="handleDialogCancel"
+                class="cancelButton"
+                tooltip="Close dialog without action"
+            />
+        </buttons>
+    </Dialog>
+</core:FragmentDefinition>

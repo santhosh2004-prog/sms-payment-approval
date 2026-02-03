@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx" xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata" xmlns:sap="http://www.sap.com/Protocols/SAPData">
+    <edmx:DataServices m:DataServiceVersion="2.0">
+        <Schema Namespace="ZPAYMENT_APPROVAL_SRV" xml:lang="en" sap:schema-version="1" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">
+            <EntityType Name="PaymentHeader" sap:content-version="1">
+                <Key>
+                    <PropertyRef Name="ApprovalNo"/>
+                </Key>
+                <Property Name="ApprovalNo" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Approval No" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="CreatedOn" Type="Edm.DateTime" Precision="0" sap:unicode="false" sap:label="Created On" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="ProfitCenter" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Profit Center" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="ProfitCenterName" Type="Edm.String" Nullable="false" MaxLength="40" sap:unicode="false" sap:label="Pft Center Name" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="CompanyCode" Type="Edm.String" Nullable="false" MaxLength="4" sap:unicode="false" sap:label="Company Code" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="CreatedBy" Type="Edm.String" Nullable="false" MaxLength="12" sap:unicode="false" sap:label="Created By" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="CreatedAt" Type="Edm.Time" Nullable="false" Precision="0" sap:unicode="false" sap:label="Created At" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="OverallStatus" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Overall Status" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <NavigationProperty Name="ToItems" Relationship="ZPAYMENT_APPROVAL_SRV.HeaderToItemNav" FromRole="FromRole_HeaderToItemNav" ToRole="ToRole_HeaderToItemNav"/>
+            </EntityType>
+            <EntityType Name="PaymentItem" sap:content-version="1">
+                <Key>
+                    <PropertyRef Name="ApprovalNo"/>
+                </Key>
+                <Property Name="ApprovalNo" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Approval No." sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="TaxNum" Type="Edm.String" Nullable="false" MaxLength="20" sap:unicode="false" sap:label="Tax Number" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="BankKey" Type="Edm.String" Nullable="false" MaxLength="15" sap:unicode="false" sap:label="Bank Key" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="VendorNumber" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Vendor Number" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="VendorName" Type="Edm.String" Nullable="false" MaxLength="30" sap:unicode="false" sap:label="Vendor Name" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="DocNum" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Document Number" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="ItemNum" Type="Edm.String" Nullable="false" MaxLength="3" sap:unicode="false" sap:label="Item" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="LiabHead" Type="Edm.String" Nullable="false" MaxLength="30" sap:unicode="false" sap:label="Liability Head" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="ReferenceDoc" Type="Edm.String" Nullable="false" MaxLength="16" sap:unicode="false" sap:label="Reference" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PurchDoc" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Purchasing Doc." sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="DocDate" Type="Edm.DateTime" Precision="7" sap:unicode="false" sap:label="Document Date" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PostingDt" Type="Edm.DateTime" Precision="7" sap:unicode="false" sap:label="Posting Date" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="InvoiceAmt" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Invoice Amount" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="BaseAmt" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Base Amount" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="GstAmt" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Gst Amount" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="TdsAmount" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="TDS Amount" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="TotalLiability" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Total Liability" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="Gst2aRef" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Gst 2A Ref" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="Gst2aNref" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Gst 2A Nref" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AmtClaimed" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Amount Claimed" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AprnoRef" Type="Edm.String" Nullable="false" MaxLength="50" sap:unicode="false" sap:label="Approval Number Ref" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AmtPaid" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Amount Paid" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="Currency" Type="Edm.String" Nullable="false" MaxLength="5" sap:unicode="false" sap:label="Currency" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false" sap:semantics="currency-code"/>
+                <Property Name="Gstr1Details" Type="Edm.String" Nullable="false" MaxLength="50" sap:unicode="false" sap:label="Gstr1 Details" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="Remark" Type="Edm.String" Nullable="false" MaxLength="50" sap:unicode="false" sap:label="Remarks" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AccountHolder" Type="Edm.String" Nullable="false" MaxLength="60" sap:unicode="false" sap:label="Account holder" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AccountNumber" Type="Edm.String" Nullable="false" MaxLength="18" sap:unicode="false" sap:label="Account Number" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="BankName" Type="Edm.String" Nullable="false" MaxLength="60" sap:unicode="false" sap:label="Bank Name" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="Branch" Type="Edm.String" Nullable="false" MaxLength="40" sap:unicode="false" sap:label="Bank Branch" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PmApprAmt" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Project Mngr. Amt" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PmUserId" Type="Edm.String" Nullable="false" MaxLength="12" sap:unicode="false" sap:label="Project Mngr. Id" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PmApprStatus" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Project Mngr. Status" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PmApprOn" Type="Edm.DateTime" Precision="7" sap:unicode="false" sap:label="Project Mngr. Approved Date" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PmApprRemarks" Type="Edm.String" Nullable="false" MaxLength="50" sap:unicode="false" sap:label="Project Mngr. Remarks" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="HodApprAmt" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Hod Approved Amount" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="HodUserId" Type="Edm.String" Nullable="false" MaxLength="12" sap:unicode="false" sap:label="Hod UserId" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="HodApprStatus" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Hod Approval Status" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="HodApprOn" Type="Edm.DateTime" Precision="7" sap:unicode="false" sap:label="Hod Approved Date" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="HodApprRemarks" Type="Edm.String" Nullable="false" MaxLength="50" sap:unicode="false" sap:label="Hod Remarks" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="CfoApprAmt" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Cfo Approved Amount" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="CfoUserId" Type="Edm.String" Nullable="false" MaxLength="12" sap:unicode="false" sap:label="Cfo UserId" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="CfoApprStatus" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Cfo Approved Status" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="CfoApprOn" Type="Edm.DateTime" Precision="7" sap:unicode="false" sap:label="Cfo Approved Date" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="CfoApprRemarks" Type="Edm.String" Nullable="false" MaxLength="50" sap:unicode="false" sap:label="Cfo Remarks" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AudApprAmt" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Auditor Approved Amount" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AudUserId" Type="Edm.String" Nullable="false" MaxLength="12" sap:unicode="false" sap:label="Auditor UserId" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AudApprStatus" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Auditor Approve Status" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AudApprOn" Type="Edm.DateTime" Precision="7" sap:unicode="false" sap:label="Auditor Approved Date" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="AudApprRemarks" Type="Edm.String" Nullable="false" MaxLength="50" sap:unicode="false" sap:label="Auditor Remarks" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="DirApprAmt" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Director Approve Amount" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="DirUserId" Type="Edm.String" Nullable="false" MaxLength="12" sap:unicode="false" sap:label="Director UserId" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="DirApprStatus" Type="Edm.String" Nullable="false" MaxLength="10" sap:unicode="false" sap:label="Director Approval Status" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="DirApprOn" Type="Edm.DateTime" Precision="7" sap:unicode="false" sap:label="Director Approved Date" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="DirApprRemarks" Type="Edm.String" Nullable="false" MaxLength="50" sap:unicode="false" sap:label="Director Approved Remarks" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="ModeOfPayment" Type="Edm.String" Nullable="false" MaxLength="20" sap:unicode="false" sap:label="Mode Of Payment" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="UtrNo" Type="Edm.String" Nullable="false" MaxLength="30" sap:unicode="false" sap:label="UTR number" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PaidAmount1" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Paid Amount1" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PaymentDate1" Type="Edm.DateTime" Precision="7" sap:unicode="false" sap:label="Payment Date1" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PaidAmount2" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Paid Amount2" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="PaymentDate2" Type="Edm.DateTime" Precision="7" sap:unicode="false" sap:label="Payment Date2" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="TotalBalOut" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Total Bal Out" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+                <Property Name="BalancePayable" Type="Edm.Decimal" Nullable="false" Precision="24" Scale="3" sap:unicode="false" sap:unit="Currency" sap:label="Balance Payable" sap:creatable="false" sap:updatable="false" sap:sortable="false" sap:filterable="false"/>
+            </EntityType>
+            <Association Name="HeaderToItemNav" sap:content-version="1">
+                <End Type="ZPAYMENT_APPROVAL_SRV.PaymentHeader" Multiplicity="1" Role="FromRole_HeaderToItemNav"/>
+                <End Type="ZPAYMENT_APPROVAL_SRV.PaymentItem" Multiplicity="*" Role="ToRole_HeaderToItemNav"/>
+                <ReferentialConstraint>
+                    <Principal Role="FromRole_HeaderToItemNav">
+                        <PropertyRef Name="ApprovalNo"/>
+                    </Principal>
+                    <Dependent Role="ToRole_HeaderToItemNav">
+                        <PropertyRef Name="ApprovalNo"/>
+                    </Dependent>
+                </ReferentialConstraint>
+            </Association>
+            <EntityContainer Name="ZPAYMENT_APPROVAL_SRV_Entities" m:IsDefaultEntityContainer="true" sap:supported-formats="atom json xlsx">
+                <EntitySet Name="PaymentHeaderSet" EntityType="ZPAYMENT_APPROVAL_SRV.PaymentHeader" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:pageable="false" sap:addressable="false" sap:content-version="1"/>
+                <EntitySet Name="PaymentItemSet" EntityType="ZPAYMENT_APPROVAL_SRV.PaymentItem" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:pageable="false" sap:content-version="1"/>
+                <AssociationSet Name="HeaderToItemNavSet" Association="ZPAYMENT_APPROVAL_SRV.HeaderToItemNav" sap:creatable="false" sap:updatable="false" sap:deletable="false" sap:content-version="1">
+                    <End EntitySet="PaymentHeaderSet" Role="FromRole_HeaderToItemNav"/>
+                    <End EntitySet="PaymentItemSet" Role="ToRole_HeaderToItemNav"/>
+                </AssociationSet>
+            </EntityContainer>
+            <Annotation Term="Core.SchemaVersion" String="1.0.0" xmlns="http://docs.oasis-open.org/odata/ns/edm"/>
+            <atom:link rel="self" href="https://s4sandbox.smsindia.com:50002/sap/opu/odata/sap/ZPAYMENT_APPROVAL_SRV/$metadata" xmlns:atom="http://www.w3.org/2005/Atom"/>
+            <atom:link rel="latest-version" href="https://s4sandbox.smsindia.com:50002/sap/opu/odata/sap/ZPAYMENT_APPROVAL_SRV/$metadata" xmlns:atom="http://www.w3.org/2005/Atom"/>
+        </Schema>
+    </edmx:DataServices>
+</edmx:Edmx>

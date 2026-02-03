@@ -1,0 +1,37 @@
+<mvc:View
+    controllerName="com.incresol.zpaymentworkflow.controller.Home"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:f="sap.f"
+    displayBlock="true"
+    height="100%">
+
+    <f:DynamicPage id="idHomeDynamicPage">
+
+        <f:title>
+            <f:DynamicPageTitle>
+                <f:heading>
+                    <Title text="Home" />
+                </f:heading>
+            </f:DynamicPageTitle>
+        </f:title>
+
+        <f:content>
+            <VBox
+                alignItems="Center"
+                justifyContent="Center"
+                width="100%"
+                height="100%">
+
+                <!-- ✅ Correct BusyIndicator -->
+                <BusyIndicator
+                    size="3rem"
+                    text="Verifying user and loading dashboard..."
+                    visible="true" />
+
+            </VBox>
+        </f:content>
+
+    </f:DynamicPage>
+
+</mvc:View>
