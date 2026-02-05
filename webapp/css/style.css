@@ -128,3 +128,77 @@
 .cancelButton .sapMBtnIcon {
     color: #424242 !important;
 }
+/* Base colors */
+/* Header background colors */
+
+/* Vendor based row colors */
+
+
+
+/* Vendor Color 1 – Sky Blue */
+.vendorColor1 {
+  background: linear-gradient(
+    90deg,
+    hsl(0, 74%, 88%) 0%,
+    #f8bebe 100%
+  ) !important;
+}
+
+/* Vendor Color 2 – Mint Green */
+.vendorColor2 {
+  background: linear-gradient(
+    90deg,
+    #E8F5E9 0%,
+    #C8E6C9 100%
+  ) !important;
+}
+
+/* Vendor Color 3 – Soft Peach */
+.vendorColor3 {
+  background: linear-gradient(
+    90deg,
+    #FFF3E0 0%,
+    #FFE0B2 100%
+  ) !important;
+}
+
+/* Vendor Color 4 – Lavender */
+.vendorColor4 {
+  background: linear-gradient(
+    90deg,
+    #F3E5F5 0%,
+    #E1BEE7 100%
+  ) !important;
+}
+
+/* Vendor Color 5 – Rose Pink */
+.vendorColor5 {
+  background: linear-gradient(
+    90deg,
+    #FCE4EC 0%,
+    #F8BBD0 100%
+  ) !important;
+}
+
+/* ================= TDS Amount Column Header ================= */
+
+/* Header cell background */
+.sapUiTableColHdr.tdsAmountColumn {
+    background-color: #EAF2FB;   /* Soft SAP blue */
+    border-bottom: 2px solid #0A6ED1;
+}
+
+/* Header text */
+.sapUiTableColHdr.tdsAmountColumn .sapUiTableColHdrLabel {
+    color: #0A6ED1;              /* SAP Blue */
+    font-weight: 700;
+}
+
+/* Optional: subtle hover */
+.sapUiTableColHdr.tdsAmountColumn:hover {
+    background-color: #DCEBFA;
+}
+.profitCenterHeader {
+    color: green;     /* text color */
+    font-weight: bold;
+}

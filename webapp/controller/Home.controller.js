@@ -59,7 +59,7 @@ sap.ui.define([
           MessageBox.error("Failed to load user verification data");
           console.error(oError);
         }
-      });
+      }); 
     }
 
   });

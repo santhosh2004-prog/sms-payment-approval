@@ -29,9 +29,26 @@ sap.ui.define([
                 treeData: []
             });
             this.getView().setModel(oTreeDataModel, "treeData");
+             this.getView().addEventDelegate({
+            onAfterRendering: function () {
+              var oTreeTable = this.byId("idTreeTable");
+              if (oTreeTable && !this._bVendorColorAttached) {
+                this._bVendorColorAttached = true;
+
+                oTreeTable.attachRowsUpdated(
+                  function () {
+                    this._applyVendorColorsToTreeTable();
+                  }.bind(this),
+                );
+              }
+            }.bind(this),
+          });
+
 
             // Wait for OData model to be available and load data
             this._waitForModelAndLoadData();
+            var oTreeModel = this.getView().getModel("treeData");
+  oTreeModel.attachRequestCompleted(this._addSelectedFlagToTreeData.bind(this));
         },
 
         _loadCustomCSS: function() {
@@ -54,6 +71,66 @@ sap.ui.define([
                 document.head.appendChild(oLink2);
             }
         },
+        _applyVendorColorsToTreeTable: function () {
+  var oTreeTable = this.byId("idTreeTable");
+  if (!oTreeTable) {
+    return;
+  }
+
+  var aColorClasses = [
+    "vendorColor1",
+    "vendorColor2",
+    "vendorColor3",
+    "vendorColor4",
+    "vendorColor5",
+  ];
+
+  // safety init (in case)
+  this._vendorColorMap = this._vendorColorMap || {};
+  this._vendorColorIndex = this._vendorColorIndex || 0;
+
+  var aRows = oTreeTable.getRows();
+
+  aRows.forEach(
+    function (oRow) {
+      // remove old color classes
+      aColorClasses.forEach(function (sClass) {
+        oRow.removeStyleClass(sClass);
+      });
+
+      var oCtx = oRow.getBindingContext("treeData");
+      if (!oCtx) {
+        return;
+      }
+
+      var oObj = oCtx.getObject();
+      if (!oObj) {
+        return;
+      }
+
+      // 🔹 Vendor key (header + item safe)
+      var sVendor =
+        oObj.VendorCode ||
+        oObj.VendorNumber ||
+        (oObj.isHeader && oObj.VendorCode);
+
+      if (!sVendor) {
+        return;
+      }
+
+      // 🔹 Assign color if not yet mapped
+      if (!this._vendorColorMap[sVendor]) {
+        this._vendorColorMap[sVendor] =
+          aColorClasses[this._vendorColorIndex % aColorClasses.length];
+        this._vendorColorIndex++;
+      }
+
+      // 🔹 Apply color
+      oRow.addStyleClass(this._vendorColorMap[sVendor]);
+    }.bind(this),
+  );
+},
+
 
         _waitForModelAndLoadData: function () {
             var oModel = this.getView().getModel("oModel");
@@ -187,23 +264,144 @@ sap.ui.define([
             MessageToast.show(sMessage);
         },
 
-  onTreeTableRowSelectionChange: function (oEvent) {
-            var oTable = oEvent.getSource();
-            var aSelectedIndices = oTable.getSelectedIndices();
-            var oViewStateModel = this.getView().getModel("viewState");
+//  onTreeTableRowSelectionChange: function (oEvent) {
+//     var oTable = oEvent.getSource();
+//     var iRowIndex = oEvent.getParameter("rowIndex");
+//     var bSelected = oEvent.getParameter("selected");
 
-            // Update view state based on selection
-            var bHasSelection = aSelectedIndices.length > 0;
-            oViewStateModel.setProperty("/showBulkActions", bHasSelection);
-            oViewStateModel.setProperty("/selectedCount", aSelectedIndices.length);
+//     // Safety check
+//     if (iRowIndex === -1) {
+//         return;
+//     }
 
-            // Add pulse animation to buttons when items are selected
-            this._updateButtonAnimations(bHasSelection);
+//     var oContext = oTable.getContextByIndex(iRowIndex);
+//     if (!oContext) {
+//         return;
+//     }
 
-            if (bHasSelection) {
-                MessageToast.show(aSelectedIndices.length + " item(s) selected. Use buttons below to approve or reject.");
-            }
-        }
+//     var oData = oContext.getObject();
+
+//     // Only act when a PARENT (header) row is clicked
+//     if (oData.isHeader && bSelected) {
+
+//         var iLevel = oTable.getLevel(iRowIndex);
+//         var iRowCount = oTable.getBinding("rows").getLength();
+
+//         // Loop through following rows to find children
+//         for (var i = iRowIndex + 1; i < iRowCount; i++) {
+//             var iNextLevel = oTable.getLevel(i);
+
+//             // Stop when next parent reached
+//             if (iNextLevel <= iLevel) {
+//                 break;
+//             }
+
+//             // Select child row
+//             oTable.addSelectionInterval(i, i);
+//         }
+//     }
+
+//     // ---- View state update (your existing logic) ----
+//     var aSelectedIndices = oTable.getSelectedIndices();
+//     var oViewStateModel = this.getView().getModel("viewState");
+
+//     oViewStateModel.setProperty("/showBulkActions", aSelectedIndices.length > 0);
+//     oViewStateModel.setProperty("/selectedCount", aSelectedIndices.length);
+// }
+_addSelectedFlagToTreeData: function () {
+  var oModel = this.getView().getModel("treeData");
+  var oData = oModel.getData();
+
+  function addFlag(aNodes) {
+    aNodes.forEach(function (oNode) {
+      oNode.selected = false;
+      if (oNode.children && oNode.children.length) {
+        addFlag(oNode.children);
+      }
+    });
+  }
+
+  addFlag(oData.treeData);
+  oModel.setData(oData);
+}
+,
+onSelectCheckBoxTreeTable: function (oEvent) {
+  var oModel = this.getView().getModel("treeData");
+  var sPath = oEvent.getSource().getBindingContext("treeData").getPath();
+  var oNode = oModel.getObject(sPath);
+
+  var oContext = {
+    path: sPath,
+    object: oNode
+  };
+
+  if (oNode.children && oNode.children.length) {
+    // parent node
+    this._selectTopDown(oContext);
+
+    if (!oNode.selected) {
+      this._unselectBottomUp(oContext, sPath);
+    }
+  } else {
+    // leaf node
+    this._unselectBottomUp(oContext, sPath);
+  }
+
+  this._updateBulkSelectionState();
+}
+,
+_selectTopDown: function (oCtx) {
+  var bSelected = oCtx.object.selected;
+  var aChildren = oCtx.object.children;
+
+  aChildren.forEach(function (oChild) {
+    oChild.selected = bSelected;
+
+    if (oChild.children && oChild.children.length) {
+      this._selectTopDown({ object: oChild });
+    }
+  }.bind(this));
+}
+,
+_unselectBottomUp: function (oCtx, sPath) {
+  var oModel = this.getView().getModel("treeData");
+
+  var aPath = sPath.split("/");
+  aPath.pop(); // index
+  aPath.pop(); // children
+  var sParentPath = aPath.join("/");
+
+  var oParent = oModel.getObject(sParentPath);
+  if (!oParent) return;
+
+  if (oParent.selected && !oCtx.object.selected) {
+    oParent.selected = false;
+    this._unselectBottomUp({ object: oParent }, sParentPath);
+  }
+}
+,
+_updateBulkSelectionState: function () {
+  var oModel = this.getView().getModel("treeData");
+  var oViewState = this.getView().getModel("viewState");
+  var iCount = 0;
+
+  function countSelected(aNodes) {
+    aNodes.forEach(function (oNode) {
+      if (!oNode.children && oNode.selected) {
+        iCount++;
+      }
+      if (oNode.children) {
+        countSelected(oNode.children);
+      }
+    });
+  }
+
+  countSelected(oModel.getData().treeData);
+
+  oViewState.setProperty("/selectedCount", iCount);
+  oViewState.setProperty("/showBulkActions", iCount > 0);
+}
+
 
 ,
 
@@ -238,58 +436,47 @@ sap.ui.define([
                 });
             }, 100);
         },
+_getSelectedLeafItems: function () {
+  var oData = this.getView().getModel("treeData").getData();
+  var aItems = [];
 
-        onApproveButtonPress: function () {
-            console.log("=== onApproveButtonPress CALLED ===");
-            var oTable = this.byId("idTreeTable");
-            var aSelectedIndices = oTable.getSelectedIndices();
+  function traverse(aNodes) {
+    aNodes.forEach(function (oNode) {
+      if (!oNode.children && oNode.selected) {
+        aItems.push(oNode);
+      }
+      if (oNode.children && oNode.children.length) {
+        traverse(oNode.children);
+      }
+    });
+  }
 
-            console.log("Selected indices:", aSelectedIndices);
+  traverse(oData.treeData);
+  return aItems;
+},
+onApproveButtonPress: function () {
+  var aSelectedItems = this._getSelectedLeafItems();
 
-            if (aSelectedIndices.length === 0) {
-                MessageToast.show("Please select items to approve");
-                return;
-            }
+  if (!aSelectedItems.length) {
+    sap.m.MessageToast.show("Please select items to approve");
+    return;
+  }
 
-            var aSelectedItems = [];
-            aSelectedIndices.forEach(function (iIndex) {
-                var oContext = oTable.getContextByIndex(iIndex);
-                if (oContext) {
-                    aSelectedItems.push(oContext.getObject());
-                }
-            });
+  this._openApprovalDialog(aSelectedItems, "APPROVE");
+}
+,
+onRejectButtonPress: function () {
+  var aSelectedItems = this._getSelectedLeafItems();
 
-            console.log("Selected items for approval:", aSelectedItems);
-            console.log("Opening approval dialog with APPROVE action");
+  if (!aSelectedItems.length) {
+    sap.m.MessageToast.show("Please select items to reject");
+    return;
+  }
 
-            this._openApprovalDialog(aSelectedItems, "APPROVE");
-        },
-        onRejectButtonPress: function () {
-            console.log("=== onRejectButtonPress CALLED ===");
-            var oTable = this.byId("idTreeTable");
-            var aSelectedIndices = oTable.getSelectedIndices();
+  this._openApprovalDialog(aSelectedItems, "REJECT");
+}
 
-            console.log("Selected indices:", aSelectedIndices);
-
-            if (!aSelectedIndices.length) {
-                sap.m.MessageToast.show("Please select items to reject");
-                return;
-            }
-
-            var aSelectedItems = [];
-            aSelectedIndices.forEach(function (iIndex) {
-                var oContext = oTable.getContextByIndex(iIndex);
-                if (oContext) {
-                    aSelectedItems.push(oContext.getObject());
-                }
-            });
-
-            console.log("Selected items for rejection:", aSelectedItems);
-            console.log("Opening approval dialog with REJECT action");
-
-            // Open dialog (remarks mandatory)
-            this._openApprovalDialog(aSelectedItems, "REJECT");
-        },
+,
         _openApprovalDialog: async function (aSelectedItems, sActionType) {
             console.log("=== _openApprovalDialog CALLED ===");
             console.log("Selected Items Count:", aSelectedItems.length);

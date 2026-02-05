@@ -282,26 +282,24 @@
                     </table:Column>
 
                     <!-- ================= TDS Amount (Header + Item) ================= -->
-                    <table:Column
+                  <table:Column
                         label="TDS Amount"
                         width="130px"
                         hAlign="End"
                     >
                         <table:template>
                             <m:VBox>
+                                <!-- Header Row -->
                                 <m:Text
                                     text="{parts: [{path: 'treeData>TotalTdsAmount'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
                                     visible="{treeData>isHeader}"
                                     class="sapThemeHighlight-asTextColor"
                                 />
-                                <m:Input
-                                    value="{treeData>TdsAmount}"
+
+                                <!-- Item Row -->
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>TdsAmount'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
                                     visible="{= !${treeData>isHeader} }"
-                                    type="Number"
-                                    placeholder="0.00"
-                                    textAlign="End"
-                                    change="onTdsAmountChange"
-                                    description="₹"
                                 />
                             </m:VBox>
                         </table:template>
@@ -417,8 +415,23 @@
                         hAlign="End"
                     >
                         <table:template>
+                            <m:Text
+                                text="{parts: [{path: 'treeData>PmApprAmt'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+ <!-- ================= Amount approved by CFO Manager ================= -->
+
+<table:Column
+                        label="CFO Approved Amount"
+                        width="180px"
+                        hAlign="End"
+                    >
+                        <table:template>
                             <m:Input
-                                value="{treeData>PmApprAmt}"
+                                value="{treeData>CfoApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
                                 type="Number"
                                 placeholder="0.00"
@@ -448,8 +461,20 @@
                         width="200px"
                     >
                         <table:template>
+                            <m:Text
+                                text="{treeData>PmApprRemarks}"
+                                visible="{= !${treeData>isHeader} }"
+                                wrapping="true"
+                            />
+                        </table:template>
+                    </table:Column>
+                    <table:Column
+                        label="CFO Remark"
+                        width="200px"
+                    >
+                        <table:template>
                             <m:Input
-                                value="{treeData>PmApprRemarks}"
+                                value="{treeData>CfoApprRemarks}"
                                 visible="{= !${treeData>isHeader} }"
                                 placeholder="Enter remarks..."
                                 maxLength="255"
@@ -457,6 +482,12 @@
                             />
                         </table:template>
                     </table:Column>
+
+
+
+
+
+
 
                     <!-- ================= Bank Name (Item) ================= -->
                     <table:Column

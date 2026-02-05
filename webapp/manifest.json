@@ -142,7 +142,20 @@
           "pattern": "cfo",
           "name": "CFO",
           "target": "CFO"
+        },
+        {
+          "pattern": "auditor",
+          "name": "Auditor",
+          "target": "Auditor"}
+
+,        {
+          "pattern": "director",
+          "name": "Director",
+          "target": "Director"
         }
+
+
+
       ],
 
       "targets": {
@@ -157,7 +170,13 @@
         },
          "CFO": {
           "viewName": "CFO"
-        }
+        },
+         "Auditor": {
+          "viewName": "Auditor"
+         }
+         ,
+          "Director": {
+            "viewName": "Director"}
       }
     },
 

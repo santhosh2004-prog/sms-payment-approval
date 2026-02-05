@@ -80,14 +80,27 @@
                 <table:TreeTable
                     id="idTreeTable"
                     rows="{path:'treeData>/treeData', parameters:{arrayNames:['children']}}"
-                    selectionMode="MultiToggle"
-                    selectionBehavior="Row"
-                    rowSelectionChange="onTreeTableRowSelectionChange"
-                    fixedColumnCount="4"
+                    selectionMode="None"
+                    enableSelectAll="false"
+                    fixedColumnCount="5"
                     enableBusyIndicator="true"
                     width="100%"
                     class="sapUiSizeCompact"
                 >
+                    <table:Column
+                        width="90px"
+                        minWidth="48"
+                        resizable="false"
+                        hAlign="Center"
+                    >
+                        <table:template>
+                            <m:CheckBox
+                                selected="{treeData>selected}"
+                                select="onSelectCheckBoxTreeTable"
+                            />
+                        </table:template>
+                    </table:Column>
+
                     <!-- ================= Approval Note No ================= -->
                     <table:Column
                         label="Approval Note No"
@@ -450,7 +463,6 @@
                     </table:Column>
                     <!-- ================= HOD Remark(Item) ================= -->
 
-
                     <table:Column
                         label="HOD Remark"
                         width="200px"
@@ -465,7 +477,6 @@
                             />
                         </table:template>
                     </table:Column>
-
 
                     <!-- ================= Bank Name (Item) ================= -->
                     <table:Column

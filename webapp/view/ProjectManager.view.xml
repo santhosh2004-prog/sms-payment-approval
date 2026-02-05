@@ -82,12 +82,18 @@
                     rows="{path:'treeData>/treeData', parameters:{arrayNames:['children']}}"
                     selectionMode="MultiToggle"
                     selectionBehavior="Row"
+                    enableSelectAll="false"
                     rowSelectionChange="onTreeTableRowSelectionChange"
-                    fixedColumnCount="4"
-                    enableBusyIndicator="true"
+                    fixedColumnCount="5"
                     width="100%"
                     class="sapUiSizeCompact"
                 >
+                    <!-- <table:rowSettingsTemplate>
+                        <table:RowSettings
+                            highlight="None"
+                            class="{treeData>VendorColorClass}"
+                        />
+                    </table:rowSettingsTemplate> -->
                     <!-- ================= Approval Note No ================= -->
                     <table:Column
                         label="Approval Note No"
@@ -116,10 +122,10 @@
                     </table:Column>
 
                     <!-- ================= Profit Center (Header) ================= -->
-                    <table:Column
-                        label="Profit Center"
-                        width="100px"
-                    >
+                        <table:Column
+                            label="Profit Center"
+                            width="100px"
+                        >
                         <table:template>
                             <m:Text
                                 text="{treeData>ProfitCenter}"
@@ -286,6 +292,7 @@
                         label="TDS Amount"
                         width="130px"
                         hAlign="End"
+                        class="tdsAmountColumn"
                     >
                         <table:template>
                             <m:VBox>
