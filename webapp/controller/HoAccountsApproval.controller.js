@@ -10,7 +10,7 @@ sap.ui.define([
 
     return Controller.extend("com.incresol.zpaymentworkflow.controller.HoAccountsApproval", {
 
-        onInit: function () {
+         onInit: function () {
             console.log("ProjectManager controller initialized");
             
             // Load custom CSS
@@ -29,20 +29,53 @@ sap.ui.define([
                 treeData: []
             });
             this.getView().setModel(oTreeDataModel, "treeData");
-             this.getView().addEventDelegate({
-            onAfterRendering: function () {
-              var oTreeTable = this.byId("idTreeTable");
-              if (oTreeTable && !this._bVendorColorAttached) {
-                this._bVendorColorAttached = true;
+            this.getView().addEventDelegate({
+    onAfterRendering: function () {
+        var oTreeTable = this.byId("idTreeTable");
+        if (!oTreeTable) {
+            return;
+        }
 
-                oTreeTable.attachRowsUpdated(
-                  function () {
+        /* ===============================
+           1️⃣ Vendor color logic (existing)
+        =============================== */
+        if (!this._bVendorColorAttached) {
+            this._bVendorColorAttached = true;
+
+            oTreeTable.attachRowsUpdated(
+                function () {
                     this._applyVendorColorsToTreeTable();
-                  }.bind(this),
-                );
-              }
-            }.bind(this),
-          });
+                }.bind(this)
+            );
+        }
+
+        /* ===============================
+           2️⃣ DEFAULT layout binding
+        =============================== */
+        if (!this._bDefaultLayoutCaptured) {
+            this._bDefaultLayoutCaptured = true;
+
+            var aDefaultColumns = oTreeTable.getColumns().map(function (oColumn) {
+                return {
+                    id: oColumn.getId().split("--").pop(),
+                    visible: oColumn.getVisible()
+                };
+            });
+
+            var oLayoutModel = this.getView().getModel("layoutModel");
+            var aLayouts = oLayoutModel.getProperty("/layouts");
+
+            var oDefaultLayout = aLayouts.find(function (oLayout) {
+                return oLayout.id === "DEFAULT";
+            });
+
+            if (oDefaultLayout) {
+                oDefaultLayout.columns = aDefaultColumns;
+                oLayoutModel.refresh(true);
+            }
+        }
+    }.bind(this)
+});
 
 
             // Wait for OData model to be available and load data
@@ -93,9 +126,47 @@ sap.ui.define([
                     { id: "colBranch", label: "Branch", visible: true },
                 ]
             });
-
             this.getView().setModel(oColumnModel, "columnModel");
+         const oLayoutModel = new sap.ui.model.json.JSONModel({
+    layouts: [
+        {
+            id: "DEFAULT",
+            name: "Default Layout",
+            isDefault: true,
+            columns: [] // will be filled AFTER rendering
         },
+        {
+            id: "MINIMAL",
+            name: "Minimal",
+            isDefault: false,
+            columns: [
+                { id: "colVendorCode", visible: true },
+                { id: "colVendorName", visible: true },
+                { id: "colGrossAmt", visible: true },
+                { id: "colPmStatus", visible: true }
+            ]
+        }
+    ],
+    selectedLayoutId: "DEFAULT"
+});
+
+this.getView().setModel(oLayoutModel, "layoutModel");
+            
+        },
+        _createDefaultLayoutFromView: function () {
+    var oTreeTable = this.byId("idTreeTable");
+    if (!oTreeTable) {
+        return [];
+    }
+
+    return oTreeTable.getColumns().map(function (oColumn) {
+        return {
+            id: oColumn.getId().split("--").pop(), // safe ID
+            visible: oColumn.getVisible()
+        };
+    });
+}
+,
 
         _loadCustomCSS: function() {
             // Ensure CSS is loaded
@@ -618,9 +689,41 @@ onRejectButtonPress: function () {
 
         },
 
+onApplyColumnSettings: function () {
+    // this._applyColumnsOnly(); // apply immediately
 
-        onApplyColumnSettings: function () {
-            const oTable = this.byId("idTreeTable");
+    if (!this._oSaveLayoutDialog) {
+        this._oSaveLayoutDialog = sap.ui.xmlfragment(
+            "com.incresol.zpaymentworkflow.view.SaveLayoutDialog",
+            this
+        );
+        this.getView().addDependent(this._oSaveLayoutDialog);
+    }
+
+    // Reset dialog state
+    sap.ui.getCore().byId("idConfirmBox").setVisible(true);
+    sap.ui.getCore().byId("idInputBox").setVisible(false);
+    sap.ui.getCore().byId("idLayoutNameInput").setValue("");
+
+    this._oSaveLayoutDialog.open();
+},
+_applyColumnsOnly: function () {
+    const oTable = this.byId("idTreeTable");
+    const aColumns = this.getView().getModel("columnModel").getProperty("/columns");
+
+    oTable.getColumns().forEach(col => col.setVisible(false));
+
+    aColumns.forEach(col => {
+        const oCol = this.byId(col.id);
+        if (oCol) {
+            oCol.setVisible(col.visible);
+        }
+    });
+},
+
+
+onSkipSaveLayout: function () {
+    const oTable = this.byId("idTreeTable");
             const aColumns = this.getView().getModel("columnModel").getProperty("/columns");
 
             aColumns.forEach(col => {
@@ -632,12 +735,397 @@ onRejectButtonPress: function () {
 
             this._oColumnDialog.close();
             console.log("Applied column settings:", aColumns);
-        },
+    this._oSaveLayoutDialog.close();
+    sap.m.MessageToast.show("Layout applied locally");
+},
+onConfirmSaveLayout: function () {
+    var oModel = this.getView().getModel("oModel");
+
+    if (!this._oLayoutNameDialog) {
+
+        this._oLayoutNameInput = new sap.m.Input({
+            placeholder: "Enter layout name",
+            liveChange: function (oEvent) {
+                var sValue = oEvent.getParameter("value");
+                this._oLayoutSaveBtn.setEnabled(!!sValue.trim());
+            }.bind(this)
+        });
+
+        this._oLayoutSaveBtn = new sap.m.Button({
+            text: "Save",
+            type: "Emphasized",
+            enabled: false,
+            press: function () {
+
+                /* ===== 1. Layout Name ===== */
+                var sLayoutName = this._oLayoutNameInput.getValue().trim();
+                if (!sLayoutName) {
+                    sap.m.MessageToast.show("Please enter layout name");
+                    return;
+                }
+
+                /* ===== 2. Column Model ===== */
+                var aColumns = this.getView()
+                    .getModel("columnModel")
+                    .getProperty("/columns") || [];
+
+                /* ===== 3. Column → Backend Field Map ===== */
+                var mFieldMap = this._getColumnFieldMap();
+
+                /* ===== 4. Base Payload (ALL FIELDS) ===== */
+                var oPayload = {
+                    UserId: "INCRESOL",
+                    LayoutName: sLayoutName.toUpperCase(),
+
+                    ApprovalNo: "",
+                    ProfitCenter: "",
+                    ProfitCenterName: "",
+                    VendorCode: "",
+                    VendorName: "",
+                    CompanyCode: "",
+                    CreationTime: "",
+                    CreatedOn: "",
+                    CreatedBy: "",
+                    OverallStatus: "",
+                    DocNum: "",
+                    ItemNum: "",
+                    LiabHead: "",
+                    ReferenceDoc: "",
+                    PurchDoc: "",
+                    DocDate: "",
+                    PostingDt: "",
+                    GrossAmt: "",
+                    BaseAmt: "",
+                    GstAmt: "",
+                    TdsAmount: "",
+                    TotalLiability: "",
+                    Gst2aRef: "",
+                    Gst2aNref: "",
+                    AmtClaimed: "",
+                    AprnoRef: "",
+                    ProposedAmt: "",
+                    Currency: "",
+                    TaxNum: "",
+                    Gstr1Details: "",
+                    Remark: "",
+                    AccountHolder: "",
+                    AccountNumber: "",
+                    BankName: "",
+                    Branch: "",
+                    BankKey: "",
+                    PmApprAmt: "",
+                    PmUserId: "",
+                    PmApprStatus: "",
+                    PmApprOn: "",
+                    PmApprRemarks: "",
+                    HodApprAmt: "",
+                    HodUserId: "",
+                    HodApprStatus: "",
+                    HodApprOn: "",
+                    HodApprRemarks: "",
+                    CfoApprAmt: "",
+                    CfoUserId: "",
+                    CfoApprStatus: "",
+                    CfoApprOn: "",
+                    CfoApprRemarks: "",
+                    AudApprAmt: "",
+                    AudUserId: "",
+                    AudApprStatus: "",
+                    AudApprOn: "",
+                    AudApprRemarks: "",
+                    DirApprAmt: "",
+                    DirUserId: "",
+                    DirApprStatus: "",
+                    DirApprOn: "",
+                    DirApprRemarks: "",
+                    ModeOfPayment: "",
+                    UtrNo: "",
+                    PaidAmount1: "",
+                    PaymentDate1: "",
+                    PaidAmount2: "",
+                    PaymentDate2: "",
+                    TotalBalOut: "",
+                    BalancePayable: ""
+                };
+
+                /* ===== 5. Fill X / "" based on visibility ===== */
+                aColumns.forEach(function (col) {
+                    var sBackendField = mFieldMap[col.id];
+                    if (sBackendField && oPayload.hasOwnProperty(sBackendField)) {
+                        oPayload[sBackendField] = col.visible ? "X" : "";
+                    }
+                });
+
+                console.log("Final UserLayoutParametersSet Payload:", oPayload);
+
+                /* ===== 6. OData CREATE ===== */
+                // var oModel = this.getView().getModel("odataModel");
+                console.log("Using OData model 😊😊😊😊😊😊😊😊😊:", oModel);
+
+                oModel.create("/UserLayoutParametersSet", oPayload, {
+                    success: function () {
+
+                        if (this._oColumnDialog) {
+                            this._oColumnDialog.close();
+                        }
+                        if (this._oSaveLayoutDialog) {
+                            this._oSaveLayoutDialog.close();
+                        }
+
+                        this._oLayoutNameDialog.close();
+
+                        sap.m.MessageToast.show(sLayoutName + " layout is saved");
+
+                    }.bind(this),
+                    error: function (oError) {
+                        sap.m.MessageToast.show("Failed to save layout");
+                        console.error("Layout save error", oError);
+                    }
+                });
+
+            }.bind(this)
+        });
+
+        this._oLayoutNameDialog = new sap.m.Dialog({
+            title: "Save Layout",
+            contentWidth: "400px",
+            content: [
+                new sap.m.Label({
+                    text: "Layout Name",
+                    labelFor: this._oLayoutNameInput
+                }),
+                this._oLayoutNameInput
+            ],
+            beginButton: this._oLayoutSaveBtn,
+            endButton: new sap.m.Button({
+                text: "Cancel",
+                press: function () {
+                    this._oLayoutNameDialog.close();
+                }.bind(this)
+            }),
+            afterClose: function () {
+                this._oLayoutNameInput.setValue("");
+                this._oLayoutSaveBtn.setEnabled(false);
+            }.bind(this)
+        });
+
+        this.getView().addDependent(this._oLayoutNameDialog);
+    }
+
+    this._oLayoutNameDialog.open();
+}
+
+
+
+
+,
+_getColumnFieldMap: function () {
+    return {
+        /* ===== HEADER LEVEL ===== */
+        idColApprovalNoteNo: "ApprovalNo",
+        colDate: "CreatedOn",
+        colProfitCenter: "ProfitCenter",
+        colProfitCente: "ProfitCenterName",
+        colCompanyCode: "CompanyCode",
+        colCreatedBy: "CreatedBy",
+        colCreationTime: "CreationTime",
+        colItemCount: "ItemNum",
+
+        /* ===== VENDOR / BASIC ===== */
+        colVendorCode: "VendorCode",
+        colVendorName: "VendorName",
+
+        /* ===== DOCUMENT DETAILS ===== */
+        colDocumentNumber: "DocNum",
+        colInvoiceNo: "DocNum",
+        colPurchaseOrder: "PurchDoc",
+        colDocumentDate: "DocDate",
+        colPostingDate: "PostingDt",
+        colReferenceDocument: "ReferenceDoc",
+
+        /* ===== LIABILITY / TAX ===== */
+        colLiabilityHead: "LiabHead",
+        colTaxNumber: "TaxNum",
+        colGstr1Details: "Gstr1Details",
+
+        /* ===== AMOUNTS ===== */
+        colGrossAmt: "GrossAmt",
+        colGST: "GstAmt",
+        colTDS: "TdsAmount",
+        colTotalLiability: "TotalLiability",
+        colAmtClaimed: "AmtClaimed",
+        colAmtAlreadyClaimed: "AmtClaimed",
+        colAmtProposed: "ProposedAmt",
+        colGst2aRef: "Gst2aRef",
+        colGst2aNref: "Gst2aNref",
+
+        /* ===== PM / APPROVAL ===== */
+        colPmApprAmt: "PmApprAmt",
+        colPmStatus: "PmApprStatus",
+        colPmRemark: "PmApprRemarks",
+
+        /* ===== BANK DETAILS ===== */
+        colBankName: "BankName",
+        colAccountNumber: "AccountNumber",
+        colAccountHolder: "AccountHolder",
+        colBankKey: "BankKey",
+
+        /* ===== CURRENCY ===== */
+        colCurrency: "Currency",
+
+        /* ===== GENERAL ===== */
+        colGeneralRemark: "Remark",
+
+        /* ===== TOTALS ===== */
+        colTotalLiability: "TotalLiability"
+    };
+}
+,
+
+
+
 
 
         onCloseColumnSettings: function () {
             this._oColumnDialog.close();
         },
+        /* ===================================================== */
+/* =============== SELECT LAYOUT LOGIC ================= */
+/* ===================================================== */
+
+
+
+onOpenLayoutDialog: function () {
+
+    /* ===== Create fragment if not exists ===== */
+    if (!this._oLayoutDialog) {
+        this._oLayoutDialog = sap.ui.xmlfragment(
+            "com.incresol.zpaymentworkflow.view.LayoutDialog",
+            this
+        );
+        this.getView().addDependent(this._oLayoutDialog);
+    }
+
+    var oModel = this.getView().getModel("oModel");
+
+    oModel.read("/UserLayoutParametersSet", {
+        success: function (oData) {
+
+            console.log("Layouts from backend:", oData);
+
+            var aLayouts = [];
+            var sDefaultLayoutName = null;
+
+            /* ===== Transform backend data ===== */
+            (oData.results || []).forEach(function (oItem) {
+                var bIsDefault = oItem.Default === "X";
+
+                aLayouts.push({
+                    name: oItem.LayoutName,
+                    isDefault: bIsDefault
+                });
+
+                if (bIsDefault) {
+                    sDefaultLayoutName = oItem.LayoutName;
+                }
+            });
+
+            /* ===== Set layout model ===== */
+            var oLayoutModel = new sap.ui.model.json.JSONModel({
+                layouts: aLayouts
+            });
+            this.getView().setModel(oLayoutModel, "layoutModel");
+
+            /* ===== Preselect default layout in list ===== */
+            if (sDefaultLayoutName) {
+                var oList = sap.ui.getCore().byId("idLayoutList");
+                if (oList) {
+                    var aItems = oList.getItems();
+                    aItems.forEach(function (oItem) {
+                        if (oItem.getTitle() === sDefaultLayoutName) {
+                            oList.setSelectedItem(oItem);
+                        }
+                    });
+                }
+
+                /* ===== Check default checkbox ===== */
+                var oDefaultCheckBox = sap.ui.getCore().byId("idSetDefaultLayout");
+                if (oDefaultCheckBox) {
+                    oDefaultCheckBox.setSelected(true);
+                }
+            }
+
+            /* ===== Open dialog AFTER binding ===== */
+            this._oLayoutDialog.open();
+
+        }.bind(this),
+
+        error: function (oError) {
+            console.error("Failed to load layouts", oError);
+            sap.m.MessageToast.show("Unable to load layouts");
+        }
+    });
+}
+
+
+,
+
+onLayoutSelectionChange: function (oEvent) {
+    var oItem = oEvent.getParameter("listItem");
+    var sPath = oItem.getBindingContext("layoutModel").getPath();
+    this._selectedLayout = this.getView()
+        .getModel("layoutModel")
+        .getObject(sPath);
+},
+
+onApplyLayout: function () {
+    if (!this._selectedLayout) {
+        sap.m.MessageToast.show("Please select a layout");
+        return;
+    }
+
+    var oTreeTable = this.byId("idTreeTable");
+    var aLayoutColumns = this._selectedLayout.columns || [];
+
+    // 1️⃣ Hide only BUSINESS columns (keep technical ones)
+    oTreeTable.getColumns().forEach(function (oColumn) {
+        var sColumnId = oColumn.getId().split("--").pop();
+
+        // Technical column → always visible
+        if (sColumnId === "colRowSelection") {
+            oColumn.setVisible(true);
+            return;
+        }
+
+        oColumn.setVisible(false);
+    });
+
+    // 2️⃣ Apply selected layout columns
+    aLayoutColumns.forEach(function (oColConfig) {
+        var oColumn = this.byId(oColConfig.id);
+        if (oColumn) {
+            oColumn.setVisible(oColConfig.visible !== false);
+        }
+    }.bind(this));
+
+    sap.m.MessageToast.show(
+        "Layout applied: " + this._selectedLayout.name
+    );
+
+    this._oLayoutDialog.close();
+}
+,
+
+onCloseLayoutDialog: function () {
+    if (this._oLayoutDialog) {
+        this._oLayoutDialog.close();
+    }
+}
+
+/* ===================================================== */
+/* ================= END SELECT LAYOUT ================= */
+/* ===================================================== */
+,
 
         onTdsAmountChange: function (oEvent) {
             var oInput = oEvent.getSource();

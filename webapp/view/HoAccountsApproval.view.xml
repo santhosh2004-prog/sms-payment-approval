@@ -73,7 +73,6 @@
                             class="rejectButton"
                             tooltip="Reject selected items"
                         />
-                        
 
                         <m:Button
                             icon="sap-icon://action-settings"
@@ -82,7 +81,13 @@
                             press="onOpenColumnSettings"
                             tooltip="Choose columns"
                         />
-
+                        <m:Button
+                            icon="sap-icon://table-view"
+                            text="Select Layout"
+                            type="Emphasized"
+                            press="onOpenLayoutDialog"
+                            tooltip="Select column layout"
+                        />
                     </m:HBox>
                 </m:Toolbar>
 
@@ -98,17 +103,16 @@
                     class="sapUiSizeCompact"
                 >
                     <table:Column
+                        id="colRowSelection"
                         width="90px"
                         minWidth="48"
                         resizable="false"
                         hAlign="Center"
-                        
                     >
                         <table:template>
                             <m:CheckBox
                                 selected="{treeData>selected}"
                                 select="onSelectCheckBoxTreeTable"
-                               
                             />
                         </table:template>
                     </table:Column>
@@ -149,13 +153,12 @@
                         id="colProfitCenter"
                         label="Profit Center"
                         width="100px"
-                        filterProperty="ProfitCenter" 
+                        filterProperty="ProfitCenter"
                     >
                         <table:template>
                             <m:Text
                                 text="{treeData>ProfitCenter}"
                                 visible="{treeData>isHeader}"
-                                  
                             />
                         </table:template>
                     </table:Column>
@@ -165,7 +168,7 @@
                         id="colProfitCente"
                         label="Profit Center Name"
                         width="150px"
-                        filterProperty="ProfitCenterName"   
+                        filterProperty="ProfitCenterName"
                     >
                         <table:template>
                             <m:Text
@@ -187,7 +190,8 @@
                         </table:template>
                     </table:Column>
 
-                    <!-- ================= Vendor Name ================= -->
+                    <!-- ================= Vendor Name =============
+                    ==== -->
                     <table:Column
                         id="colVendorName"
                         label="Name of Vendor"
@@ -726,8 +730,6 @@
                     </table:Column>
 
                     <!-- ================= Branch (Item) ================= -->
-                   
-
                 </table:TreeTable>
             </m:VBox>
         </f:content>

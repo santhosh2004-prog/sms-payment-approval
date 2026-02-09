@@ -103,6 +103,31 @@ sap.ui.define(
                     { id: "colBranch", label: "Branch", visible: true },
                 ]
             });
+            const oLayoutModel = new sap.ui.model.json.JSONModel({
+    layouts: [
+        {
+            id: "DEFAULT",
+            name: "Default Layout",
+            isDefault: true,
+            columns: this.getView().getModel("columnModel").getProperty("/columns")
+        },
+        {
+            id: "MINIMAL",
+            name: "Minimal",
+            isDefault: false,
+            columns: [
+                { id: "colVendorCode", visible: true },
+                { id: "colVendorName", visible: true },
+                { id: "colGrossAmt", visible: true },
+                { id: "colPmStatus", visible: true }
+            ]
+        }
+    ],
+    selectedLayoutId: "DEFAULT"
+});
+
+this.getView().setModel(oLayoutModel, "layoutModel");
+
 
             this.getView().setModel(oColumnModel, "columnModel");
         },
