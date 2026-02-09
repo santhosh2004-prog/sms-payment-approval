@@ -139,8 +139,8 @@
 .vendorColor1 {
   background: linear-gradient(
     90deg,
-    hsl(0, 74%, 88%) 0%,
-    #f8bebe 100%
+    hsl(0, 100%, 94%) 0%,
+    #fbd0d0 100%
   ) !important;
 }
 
@@ -148,8 +148,8 @@
 .vendorColor2 {
   background: linear-gradient(
     90deg,
-    #E8F5E9 0%,
-    #C8E6C9 100%
+    #f2faf3 0%,
+    #d5eed6 100%
   ) !important;
 }
 
@@ -157,8 +157,8 @@
 .vendorColor3 {
   background: linear-gradient(
     90deg,
-    #FFF3E0 0%,
-    #FFE0B2 100%
+    #fff7eb 0%,
+    #fdecd3 100%
   ) !important;
 }
 
@@ -166,8 +166,8 @@
 .vendorColor4 {
   background: linear-gradient(
     90deg,
-    #F3E5F5 0%,
-    #E1BEE7 100%
+    #f8f1f9 0%,
+    #f4ddf8 100%
   ) !important;
 }
 
@@ -175,8 +175,8 @@
 .vendorColor5 {
   background: linear-gradient(
     90deg,
-    #FCE4EC 0%,
-    #F8BBD0 100%
+    #fff4f7 0%,
+    #f5d1de 100%
   ) !important;
 }
 

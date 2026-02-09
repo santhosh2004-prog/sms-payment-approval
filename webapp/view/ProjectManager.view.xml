@@ -80,21 +80,28 @@
                 <table:TreeTable
                     id="idTreeTable"
                     rows="{path:'treeData>/treeData', parameters:{arrayNames:['children']}}"
-                    selectionMode="MultiToggle"
-                    selectionBehavior="Row"
+                    selectionMode="None"
                     enableSelectAll="false"
-                    rowSelectionChange="onTreeTableRowSelectionChange"
                     fixedColumnCount="5"
+                    enableBusyIndicator="true"
                     width="100%"
                     class="sapUiSizeCompact"
                 >
-                    <!-- <table:rowSettingsTemplate>
-                        <table:RowSettings
-                            highlight="None"
-                            class="{treeData>VendorColorClass}"
-                        />
-                    </table:rowSettingsTemplate> -->
-                    <!-- ================= Approval Note No ================= -->
+                    <table:Column
+                        width="90px"
+                        minWidth="48"
+                        resizable="false"
+                        hAlign="Center"
+                        
+                    >
+                        <table:template>
+                            <m:CheckBox
+                                selected="{treeData>selected}"
+                                select="onSelectCheckBoxTreeTable"
+                               
+                            />
+                        </table:template>
+                    </table:Column>
                     <table:Column
                         label="Approval Note No"
                         width="120px"
@@ -122,10 +129,10 @@
                     </table:Column>
 
                     <!-- ================= Profit Center (Header) ================= -->
-                        <table:Column
-                            label="Profit Center"
-                            width="100px"
-                        >
+                    <table:Column
+                        label="Profit Center"
+                        width="100px"
+                    >
                         <table:template>
                             <m:Text
                                 text="{treeData>ProfitCenter}"

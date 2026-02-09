@@ -19,26 +19,25 @@ sap.ui.define(
 
     return Controller.extend("com.incresol.zpaymentworkflow.controller.CFO", {
       onInit: function () {
-        console.log("ProjectManager controller initialized");
+            console.log("ProjectManager controller initialized");
+            
+            // Load custom CSS
+            this._loadCustomCSS();
 
-        // Load custom CSS
-        this._loadCustomCSS();
+            // Initialize view state model for bulk actions and currency display
+            var oViewStateModel = new JSONModel({
+                showBulkActions: false,
+                selectedCount: 0,
+                showInLakhs: false // Default to rupees view
+            });
+            this.getView().setModel(oViewStateModel, "viewState");
 
-        // Initialize view state model for bulk actions and currency display
-        var oViewStateModel = new JSONModel({
-          showBulkActions: false,
-          selectedCount: 0,
-          showInLakhs: false, // Default to rupees view
-        });
-        this.getView().setModel(oViewStateModel, "viewState");
-
-        // Initialize tree data model
-        var oTreeDataModel = new JSONModel({
-          treeData: [],
-        });
-        this.getView().setModel(oTreeDataModel, "treeData");
-
-         this.getView().addEventDelegate({
+            // Initialize tree data model
+            var oTreeDataModel = new JSONModel({
+                treeData: []
+            });
+            this.getView().setModel(oTreeDataModel, "treeData");
+             this.getView().addEventDelegate({
             onAfterRendering: function () {
               var oTreeTable = this.byId("idTreeTable");
               if (oTreeTable && !this._bVendorColorAttached) {
@@ -54,33 +53,33 @@ sap.ui.define(
           });
 
 
-        // Wait for OData model to be available and load data
-        this._waitForModelAndLoadData();
-      },
+            // Wait for OData model to be available and load data
+            this._waitForModelAndLoadData();
+            var oTreeModel = this.getView().getModel("treeData");
+  oTreeModel.attachRequestCompleted(this._addSelectedFlagToTreeData.bind(this));
+        },
 
-      _loadCustomCSS: function () {
-        // Ensure CSS is loaded
-        try {
-          var sStylePath = sap.ui.require.toUrl(
-            "com/incresol/zpaymentworkflow/css/style.css",
-          );
-          var oLink = document.createElement("link");
-          oLink.rel = "stylesheet";
-          oLink.type = "text/css";
-          oLink.href = sStylePath;
-          document.head.appendChild(oLink);
-          console.log("Custom CSS loaded from:", sStylePath);
-        } catch (e) {
-          console.warn("Could not load custom CSS:", e);
-          // Fallback: try relative path
-          var oLink2 = document.createElement("link");
-          oLink2.rel = "stylesheet";
-          oLink2.type = "text/css";
-          oLink2.href = "./css/style.css";
-          document.head.appendChild(oLink2);
-        }
-      },
-      _applyVendorColorsToTreeTable: function () {
+        _loadCustomCSS: function() {
+            // Ensure CSS is loaded
+            try {
+                var sStylePath = sap.ui.require.toUrl("com/incresol/zpaymentworkflow/css/style.css");
+                var oLink = document.createElement("link");
+                oLink.rel = "stylesheet";
+                oLink.type = "text/css";
+                oLink.href = sStylePath;
+                document.head.appendChild(oLink);
+                console.log("Custom CSS loaded from:", sStylePath);
+            } catch (e) {
+                console.warn("Could not load custom CSS:", e);
+                // Fallback: try relative path
+                var oLink2 = document.createElement("link");
+                oLink2.rel = "stylesheet";
+                oLink2.type = "text/css";
+                oLink2.href = "./css/style.css";
+                document.head.appendChild(oLink2);
+            }
+        },
+        _applyVendorColorsToTreeTable: function () {
   var oTreeTable = this.byId("idTreeTable");
   if (!oTreeTable) {
     return;
@@ -141,393 +140,419 @@ sap.ui.define(
 },
 
 
-      _waitForModelAndLoadData: function () {
-        var oModel = this.getView().getModel("oModel");
+        _waitForModelAndLoadData: function () {
+            var oModel = this.getView().getModel("oModel");
 
-        if (oModel && oModel.getServiceMetadata()) {
-          // Model is ready, load data immediately
-          console.log("OData model ready, loading data");
-          this._loadPaymentData();
-        } else if (oModel) {
-          // Model exists but metadata not loaded yet
-          console.log("Waiting for OData metadata to load");
-          oModel.attachMetadataLoaded(
-            function () {
-              console.log("OData metadata loaded, now loading data");
-              this._loadPaymentData();
-            }.bind(this),
-          );
+            if (oModel && oModel.getServiceMetadata()) {
+                // Model is ready, load data immediately
+                console.log("OData model ready, loading data");
+                this._loadPaymentData();
+            } else if (oModel) {
+                // Model exists but metadata not loaded yet
+                console.log("Waiting for OData metadata to load");
+                oModel.attachMetadataLoaded(function () {
+                    console.log("OData metadata loaded, now loading data");
+                    this._loadPaymentData();
+                }.bind(this));
 
-          oModel.attachMetadataFailed(function (oEvent) {
-            console.error(
-              "OData metadata loading failed:",
-              oEvent.getParameters(),
-            );
-            MessageToast.show("Failed to load OData metadata");
-          });
-        } else {
-          // Model not available yet, retry after delay
-          console.log("OData model not available, retrying in 1 second");
-          setTimeout(
-            function () {
-              this._waitForModelAndLoadData();
-            }.bind(this),
-            1000,
-          );
-        }
-      },
-
-      _loadPaymentData: function () {
-        var oModel = this.getView().getModel("oModel");
-
-        if (!oModel) {
-          MessageToast.show("OData model 'oModel' not available");
-          return;
-        }
-
-        oModel.read("/PaymentHeaderSet", {
-          urlParameters: {
-            $expand: "ToItems",
-          },
-          success: function (oData) {
-            console.log("PaymentHeaderSet raw response:", oData);
-
-            var aHeaders = oData && oData.results ? oData.results : [];
-            console.log("Headers count:", aHeaders.length);
-
-            if (aHeaders.length > 0) {
-              console.log("Sample header:", aHeaders[0]);
-              console.log("Sample header ToItems:", aHeaders[0].ToItems);
-            }
-
-            if (aHeaders.length === 0) {
-              MessageToast.show("No payment data available");
-              this.getView().getModel("treeData").setData({ treeData: [] });
-              return;
-            }
-
-            this._transformExpandedHeaderToTree(aHeaders);
-          }.bind(this),
-          error: function (oError) {
-            console.error(
-              "Error loading PaymentHeaderSet with expand:",
-              oError,
-            );
-            this.getView().getModel("treeData").setData({ treeData: [] });
-            MessageToast.show("Error loading payment data");
-          }.bind(this),
-        });
-      },
-
-      _transformExpandedHeaderToTree: function (aHeaders) {
-        var aTreeData = aHeaders.map(function (oHeader) {
-          var aItems =
-            oHeader.ToItems && oHeader.ToItems.results
-              ? oHeader.ToItems.results
-              : [];
-
-          return {
-            // ===== Header (backend fields) =====
-            ApprovalNo: oHeader.ApprovalNo,
-            CreatedOn: oHeader.CreatedOn,
-            ProfitCenter: oHeader.ProfitCenter,
-            ProfitCenterName: oHeader.ProfitCenterName,
-            VendorCode: oHeader.VendorCode,
-            VendorName: oHeader.VendorName,
-            CompanyCode: oHeader.CompanyCode,
-            CreatedBy: oHeader.CreatedBy,
-            CreatedAt: oHeader.CreationTime,
-            OverallStatus: oHeader.OverallStatus,
-
-            // ===== Amounts from backend header =====
-            TotalBaseAmt: oHeader.BaseAmount,
-            TotalGstAmt: oHeader.GSTAmount,
-            TotalTdsAmount: oHeader.TDSAmount,
-            TotalLiability: oHeader.TotalLiability,
-            TotalAmtClaimed: oHeader.AmountClaimed,
-
-            ItemCount: aItems.length,
-
-            isHeader: true,
-            displayText:
-              "Approval: " +
-              oHeader.ApprovalNo +
-              " - " +
-              (oHeader.VendorName || ""),
-            Currency: aItems.length > 0 ? aItems[0].Currency : "",
-
-            // ===== Children =====
-            children: aItems.map(function (oItem) {
-              return Object.assign({}, oItem, {
-                isHeader: false,
-                displayText:
-                  "Item " + oItem.ItemNum + " - " + (oItem.VendorName || ""),
-              });
-            }),
-          };
-        });
-
-        this.getView().getModel("treeData").setData({ treeData: aTreeData });
-
-        setTimeout(
-          function () {
-            var oTreeTable = this.byId("idTreeTable");
-            if (oTreeTable && aTreeData.length > 0) {
-              for (var i = 0; i < aTreeData.length; i++) {
-                oTreeTable.expand(i);
-              }
-            }
-          }.bind(this),
-          100,
-        );
-      },
-
-      onSwitchShowInLakhsChange: function (oEvent) {
-        var oSwitch = oEvent.getSource();
-        var bState = oSwitch.getState();
-
-        // Update the view state model
-        var oViewStateModel = this.getView().getModel("viewState");
-        oViewStateModel.setProperty("/showInLakhs", bState);
-
-        // Show appropriate message
-        var sMessage = bState
-          ? "Amounts now displayed in Lakhs"
-          : "Amounts now displayed in Rupees";
-        MessageToast.show(sMessage);
-      },
-
-     onTreeTableRowSelectionChange: function (oEvent) {
-    var oTable = oEvent.getSource();
-    var oContext = oEvent.getParameter("rowContext");
-    var bSelected = oEvent.getParameter("selected");
-    var oViewStateModel = this.getView().getModel("viewState");
-
-    // If a row is selected, select its children
-    if (bSelected && oContext) {
-        var sPath = oContext.getPath();
-
-        // Get child row indices based on the selected row path
-        var aChildIndices = this._getChildIndices(oTable, sPath);
-
-        aChildIndices.forEach(function (iIndex) {
-            oTable.setSelectionInterval(iIndex, iIndex);
-        });
-    }
-
-    // Read final selection after interval selection
-    var aSelectedIndices = oTable.getSelectedIndices();
-    var bHasSelection = aSelectedIndices.length > 0;
-
-    // Update view state
-    oViewStateModel.setProperty("/isRowSelected", bHasSelection);
-    oViewStateModel.setProperty("/selectedCount", aSelectedIndices.length);
-
-    // Button animation handling
-    this._updateButtonAnimations(bHasSelection);
-
-    if (bHasSelection) {
-        MessageToast.show(
-            aSelectedIndices.length +
-            " item(s) selected. Use buttons below to approve or reject."
-        );
-    }
-}
-,
-
-      _updateButtonAnimations: function (bHasSelection) {
-        // Add pulse animation to buttons when items are selected
-        setTimeout(function () {
-          var aApproveButtons = document.querySelectorAll(".approveButton");
-          var aRejectButtons = document.querySelectorAll(".rejectButton");
-
-          aApproveButtons.forEach(function (oButton) {
-            if (bHasSelection) {
-              oButton.classList.add("pulse");
-              // Remove pulse after 3 seconds
-              setTimeout(function () {
-                oButton.classList.remove("pulse");
-              }, 3000);
+                oModel.attachMetadataFailed(function (oEvent) {
+                    console.error("OData metadata loading failed:", oEvent.getParameters());
+                    MessageToast.show("Failed to load OData metadata");
+                });
             } else {
-              oButton.classList.remove("pulse");
+                // Model not available yet, retry after delay
+                console.log("OData model not available, retrying in 1 second");
+                setTimeout(function () {
+                    this._waitForModelAndLoadData();
+                }.bind(this), 1000);
             }
-          });
+        },
 
-          aRejectButtons.forEach(function (oButton) {
-            if (bHasSelection) {
-              oButton.classList.add("pulse");
-              // Remove pulse after 3 seconds
-              setTimeout(function () {
-                oButton.classList.remove("pulse");
-              }, 3000);
-            } else {
-              oButton.classList.remove("pulse");
+        _loadPaymentData: function () {
+            var oModel = this.getView().getModel("oModel");
+
+            if (!oModel) {
+                MessageToast.show("OData model 'oModel' not available");
+                return;
             }
-          });
-        }, 100);
-      },
 
-      onApproveButtonPress: function () {
-        console.log("=== onApproveButtonPress CALLED ===");
-        var oTable = this.byId("idTreeTable");
-        var aSelectedIndices = oTable.getSelectedIndices();
+            oModel.read("/PaymentHeaderSet", {
+                urlParameters: {
+                    "$expand": "ToItems"
+                },
+                success: function (oData) {
+                    console.log("PaymentHeaderSet raw response:", oData);
 
-        console.log("Selected indices:", aSelectedIndices);
+                    var aHeaders = (oData && oData.results) ? oData.results : [];
+                    console.log("Headers count:", aHeaders.length);
 
-        if (aSelectedIndices.length === 0) {
-          MessageToast.show("Please select items to approve");
-          return;
-        }
+                    if (aHeaders.length > 0) {
+                        console.log("Sample header:", aHeaders[0]);
+                        console.log("Sample header ToItems:", aHeaders[0].ToItems);
+                    }
 
-        var aSelectedItems = [];
-        aSelectedIndices.forEach(function (iIndex) {
-          var oContext = oTable.getContextByIndex(iIndex);
-          if (oContext) {
-            aSelectedItems.push(oContext.getObject());
-          }
-        });
+                    if (aHeaders.length === 0) {
+                        MessageToast.show("No payment data available");
+                        this.getView().getModel("treeData").setData({ treeData: [] });
+                        return;
+                    }
 
-        console.log("Selected items for approval:", aSelectedItems);
-        console.log("Opening approval dialog with APPROVE action");
+                    this._transformExpandedHeaderToTree(aHeaders);
+                }.bind(this),
+                error: function (oError) {
+                    console.error("Error loading PaymentHeaderSet with expand:", oError);
+                    this.getView().getModel("treeData").setData({ treeData: [] });
+                    MessageToast.show("Error loading payment data");
+                }.bind(this)
+            });
+        },
 
-        this._openApprovalDialog(aSelectedItems, "APPROVE");
-      },
-      onRejectButtonPress: function () {
-        console.log("=== onRejectButtonPress CALLED ===");
-        var oTable = this.byId("idTreeTable");
-        var aSelectedIndices = oTable.getSelectedIndices();
+        _transformExpandedHeaderToTree: function (aHeaders) {
+            var aTreeData = aHeaders.map(function (oHeader) {
+                var aItems = (oHeader.ToItems && oHeader.ToItems.results) ? oHeader.ToItems.results : [];
 
-        console.log("Selected indices:", aSelectedIndices);
+                return {
+                    // ===== Header (backend fields) =====
+                    ApprovalNo: oHeader.ApprovalNo,
+                    CreatedOn: oHeader.CreatedOn,
+                    ProfitCenter: oHeader.ProfitCenter,
+                    ProfitCenterName: oHeader.ProfitCenterName,
+                    VendorCode: oHeader.VendorCode,
+                    VendorName: oHeader.VendorName,
+                    CompanyCode: oHeader.CompanyCode,
+                    CreatedBy: oHeader.CreatedBy,
+                    CreatedAt: oHeader.CreationTime,
+                    OverallStatus: oHeader.OverallStatus,
 
-        if (!aSelectedIndices.length) {
-          sap.m.MessageToast.show("Please select items to reject");
-          return;
-        }
+                    // ===== Amounts from backend header =====
+                    TotalBaseAmt: oHeader.BaseAmount,
+                    TotalGstAmt: oHeader.GSTAmount,
+                    TotalTdsAmount: oHeader.TDSAmount,
+                    TotalLiability: oHeader.TotalLiability,
+                    TotalAmtClaimed: oHeader.AmountClaimed,
 
-        var aSelectedItems = [];
-        aSelectedIndices.forEach(function (iIndex) {
-          var oContext = oTable.getContextByIndex(iIndex);
-          if (oContext) {
-            aSelectedItems.push(oContext.getObject());
-          }
-        });
+                    ItemCount: aItems.length,
 
-        console.log("Selected items for rejection:", aSelectedItems);
-        console.log("Opening approval dialog with REJECT action");
+                    isHeader: true,
+                    displayText: "Approval: " + oHeader.ApprovalNo + " - " + (oHeader.VendorName || ""),
+                    Currency: aItems.length > 0 ? aItems[0].Currency : "",
 
-        // Open dialog (remarks mandatory)
-        this._openApprovalDialog(aSelectedItems, "REJECT");
-      },
-      _openApprovalDialog: async function (aSelectedItems, sActionType) {
-        console.log("=== _openApprovalDialog CALLED ===");
-        console.log("Selected Items Count:", aSelectedItems.length);
-        console.log("Action Type:", sActionType);
-        console.log("Selected Items:", aSelectedItems);
-
-        var sDialogTitle =
-          sActionType === "APPROVE" ? "Approve Items" : "Reject Items";
-
-        // 1) Prepare dialog model data
-        var oDialogModel = new sap.ui.model.json.JSONModel({
-          title: sDialogTitle,
-          actionType: sActionType === "APPROVE" ? "Approve" : "Reject",
-          itemCount: aSelectedItems.length,
-          selectedItems: aSelectedItems,
-        });
-
-        console.log("Dialog model data:", oDialogModel.getData());
-
-        // 2) Load fragment once
-        if (!this._oApprovalDialog) {
-          console.log("Loading approval dialog fragment...");
-          this._sDialogFragmentId = this.getView().getId() + "--ApprovalDialog"; // IMPORTANT
-          this._oApprovalDialog = await sap.ui.core.Fragment.load({
-            id: this._sDialogFragmentId,
-            name: "com.incresol.zpaymentworkflow.view.ApprovalDialog", // <-- CHANGE to your fragment path
-            controller: this,
-          });
-          this.getView().addDependent(this._oApprovalDialog);
-          console.log("Dialog fragment loaded and added as dependent");
-        }
-
-        // 3) Set model on dialog (THIS IS THE KEY)
-        this._oApprovalDialog.setModel(oDialogModel, "dialogModel");
-        console.log("Dialog model set");
-
-        // 4) Store selected items + action in controller for processing
-        this._aDialogSelectedItems = aSelectedItems;
-        this._sDialogActionType = sActionType;
-
-        console.log("Stored dialog data:");
-        console.log("  _aDialogSelectedItems:", this._aDialogSelectedItems);
-        console.log("  _sDialogActionType:", this._sDialogActionType);
-
-        // 5) Open
-        console.log("Opening dialog...");
-        this._oApprovalDialog.open();
-        console.log("Dialog opened");
-      },
-
-      handleDialogConfirm: function () {
-        console.log("=== handleDialogConfirm CALLED ===");
-
-        var sActionType = this._sDialogActionType; // "APPROVE" or "REJECT"
-        var aSelectedItems = this._aDialogSelectedItems;
-
-        console.log("Dialog Action Type:", sActionType);
-        console.log("Dialog Selected Items:", aSelectedItems);
-        console.log(
-          "Dialog Selected Items Count:",
-          aSelectedItems ? aSelectedItems.length : 0,
-        );
-
-        // For rejection, validate that all selected items have remarks
-        if (sActionType === "REJECT") {
-          console.log("=== VALIDATING REMARKS FOR REJECTION ===");
-          var aItemsWithoutRemarks = [];
-
-          aSelectedItems.forEach(function (oItem) {
-            console.log("Checking item for remarks:", {
-              isHeader: oItem.isHeader,
-              ApprovalNo: oItem.ApprovalNo,
-              PmApprRemarks: oItem.PmApprRemarks,
+                    // ===== Children =====
+                    children: aItems.map(function (oItem) {
+                        return Object.assign({}, oItem, {
+                            isHeader: false,
+                            displayText: "Item " + oItem.ItemNum + " - " + (oItem.VendorName || "")
+                        });
+                    })
+                };
             });
 
-            if (
-              !oItem.isHeader &&
-              (!oItem.PmApprRemarks || oItem.PmApprRemarks.trim() === "")
-            ) {
-              aItemsWithoutRemarks.push(oItem);
-              console.log("  -> Item missing remarks:", oItem);
+            this.getView().getModel("treeData").setData({ treeData: aTreeData });
+
+            setTimeout(function () {
+                var oTreeTable = this.byId("idTreeTable");
+                if (oTreeTable && aTreeData.length > 0) {
+                    for (var i = 0; i < aTreeData.length; i++) {
+                        oTreeTable.expand(i);
+                    }
+                }
+            }.bind(this), 100);
+        },
+
+        onSwitchShowInLakhsChange: function (oEvent) {
+            var oSwitch = oEvent.getSource();
+            var bState = oSwitch.getState();
+
+            // Update the view state model
+            var oViewStateModel = this.getView().getModel("viewState");
+            oViewStateModel.setProperty("/showInLakhs", bState);
+
+            // Show appropriate message
+            var sMessage = bState ? "Amounts now displayed in Lakhs" : "Amounts now displayed in Rupees";
+            MessageToast.show(sMessage);
+        },
+
+
+_addSelectedFlagToTreeData: function () {
+  var oModel = this.getView().getModel("treeData");
+  var oData = oModel.getData();
+
+  function addFlag(aNodes) {
+    aNodes.forEach(function (oNode) {
+      oNode.selected = false;
+      if (oNode.children && oNode.children.length) {
+        addFlag(oNode.children);
+      }
+    });
+  }
+
+  addFlag(oData.treeData);
+  oModel.setData(oData);
+}
+,
+onSelectCheckBoxTreeTable: function (oEvent) {
+  var oModel = this.getView().getModel("treeData");
+  var sPath = oEvent.getSource().getBindingContext("treeData").getPath();
+  var oNode = oModel.getObject(sPath);
+
+  var oContext = {
+    path: sPath,
+    object: oNode
+  };
+
+  if (oNode.children && oNode.children.length) {
+    // parent node
+    this._selectTopDown(oContext);
+
+    if (!oNode.selected) {
+      this._unselectBottomUp(oContext, sPath);
+    }
+  } else {
+    // leaf node
+    this._unselectBottomUp(oContext, sPath);
+  }
+
+  this._updateBulkSelectionState();
+}
+,
+_selectTopDown: function (oCtx) {
+  var bSelected = oCtx.object.selected;
+  var aChildren = oCtx.object.children;
+
+  aChildren.forEach(function (oChild) {
+    oChild.selected = bSelected;
+
+    if (oChild.children && oChild.children.length) {
+      this._selectTopDown({ object: oChild });
+    }
+  }.bind(this));
+}
+,
+_unselectBottomUp: function (oCtx, sPath) {
+  var oModel = this.getView().getModel("treeData");
+
+  var aPath = sPath.split("/");
+  aPath.pop(); // index
+  aPath.pop(); // children
+  var sParentPath = aPath.join("/");
+
+  var oParent = oModel.getObject(sParentPath);
+  if (!oParent) return;
+
+  if (oParent.selected && !oCtx.object.selected) {
+    oParent.selected = false;
+    this._unselectBottomUp({ object: oParent }, sParentPath);
+  }
+}
+,
+_updateBulkSelectionState: function () {
+  var oModel = this.getView().getModel("treeData");
+  var oViewState = this.getView().getModel("viewState");
+  var iCount = 0;
+
+  function countSelected(aNodes) {
+    aNodes.forEach(function (oNode) {
+      if (!oNode.children && oNode.selected) {
+        iCount++;
+      }
+      if (oNode.children) {
+        countSelected(oNode.children);
+      }
+    });
+  }
+
+  countSelected(oModel.getData().treeData);
+
+  oViewState.setProperty("/selectedCount", iCount);
+  oViewState.setProperty("/showBulkActions", iCount > 0);
+}
+
+
+,
+
+        _updateButtonAnimations: function(bHasSelection) {
+            // Add pulse animation to buttons when items are selected
+            setTimeout(function() {
+                var aApproveButtons = document.querySelectorAll('.approveButton');
+                var aRejectButtons = document.querySelectorAll('.rejectButton');
+                
+                aApproveButtons.forEach(function(oButton) {
+                    if (bHasSelection) {
+                        oButton.classList.add('pulse');
+                        // Remove pulse after 3 seconds
+                        setTimeout(function() {
+                            oButton.classList.remove('pulse');
+                        }, 3000);
+                    } else {
+                        oButton.classList.remove('pulse');
+                    }
+                });
+                
+                aRejectButtons.forEach(function(oButton) {
+                    if (bHasSelection) {
+                        oButton.classList.add('pulse');
+                        // Remove pulse after 3 seconds
+                        setTimeout(function() {
+                            oButton.classList.remove('pulse');
+                        }, 3000);
+                    } else {
+                        oButton.classList.remove('pulse');
+                    }
+                });
+            }, 100);
+        },
+_getSelectedLeafItems: function () {
+  var oData = this.getView().getModel("treeData").getData();
+  var aItems = [];
+
+  function traverse(aNodes) {
+    aNodes.forEach(function (oNode) {
+      if (!oNode.children && oNode.selected) {
+        aItems.push(oNode);
+      }
+      if (oNode.children && oNode.children.length) {
+        traverse(oNode.children);
+      }
+    });
+  }
+
+  traverse(oData.treeData);
+  return aItems;
+},
+onApproveButtonPress: function () {
+  var aSelectedItems = this._getSelectedLeafItems();
+
+  if (!aSelectedItems.length) {
+    sap.m.MessageToast.show("Please select items to approve");
+    return;
+  }
+
+  this._openApprovalDialog(aSelectedItems, "APPROVE");
+}
+,
+onRejectButtonPress: function () {
+  var aSelectedItems = this._getSelectedLeafItems();
+
+  if (!aSelectedItems.length) {
+    sap.m.MessageToast.show("Please select items to reject");
+    return;
+  }
+
+  this._openApprovalDialog(aSelectedItems, "REJECT");
+}
+
+
+,
+        _openApprovalDialog: async function (aSelectedItems, sActionType) {
+            console.log("=== _openApprovalDialog CALLED ===");
+            console.log("Selected Items Count:", aSelectedItems.length);
+            console.log("Action Type:", sActionType);
+            console.log("Selected Items:", aSelectedItems);
+
+            var sDialogTitle = sActionType === "APPROVE" ? "Approve Items" : "Reject Items";
+
+            // 1) Prepare dialog model data
+            var oDialogModel = new sap.ui.model.json.JSONModel({
+                title: sDialogTitle,
+                actionType: sActionType === "APPROVE" ? "Approve" : "Reject",
+                itemCount: aSelectedItems.length,
+                selectedItems: aSelectedItems
+            });
+
+            console.log("Dialog model data:", oDialogModel.getData());
+
+            // 2) Load fragment once
+            if (!this._oApprovalDialog) {
+                console.log("Loading approval dialog fragment...");
+                this._sDialogFragmentId = this.getView().getId() + "--ApprovalDialog"; // IMPORTANT
+                this._oApprovalDialog = await sap.ui.core.Fragment.load({
+                    id: this._sDialogFragmentId,
+                    name: "com.incresol.zpaymentworkflow.view.ApprovalDialog", // <-- CHANGE to your fragment path
+                    controller: this
+                });
+                this.getView().addDependent(this._oApprovalDialog);
+                console.log("Dialog fragment loaded and added as dependent");
             }
-          });
 
-          if (aItemsWithoutRemarks.length > 0) {
-            console.log(
-              "❌ REJECTION BLOCKED - Missing remarks for " +
-                aItemsWithoutRemarks.length +
-                " items",
-            );
-            MessageToast.show(
-              "Please enter remarks for all items before rejecting. " +
-                aItemsWithoutRemarks.length +
-                " item(s) missing remarks.",
-            );
-            this._oApprovalDialog.close();
+            // 3) Set model on dialog (THIS IS THE KEY)
+            this._oApprovalDialog.setModel(oDialogModel, "dialogModel");
+            console.log("Dialog model set");
+
+            // 4) Store selected items + action in controller for processing
+            this._aDialogSelectedItems = aSelectedItems;
+            this._sDialogActionType = sActionType;
+
+            console.log("Stored dialog data:");
+            console.log("  _aDialogSelectedItems:", this._aDialogSelectedItems);
+            console.log("  _sDialogActionType:", this._sDialogActionType);
+
+            // 5) Open
+            console.log("Opening dialog...");
+            this._oApprovalDialog.open();
+            console.log("Dialog opened");
+        },
+
+
+  handleDialogConfirm: function () {
+    console.log("=== handleDialogConfirm CALLED ===");
+
+    var sActionType = this._sDialogActionType; // "APPROVE" or "REJECT"
+    var aSelectedItems = this._aDialogSelectedItems || [];
+
+    console.log("Dialog Action Type:", sActionType);
+    console.log("Dialog Selected Items:", aSelectedItems);
+    console.log("Dialog Selected Items Count:", aSelectedItems.length);
+
+    /* ================= REJECT VALIDATION ================= */
+    if (sActionType === "REJECT") {
+        console.log("=== VALIDATING HOD REMARKS FOR REJECTION ===");
+
+        var aItemsWithoutRemarks = [];
+
+        aSelectedItems.forEach(function (oItem) {
+            // Validate ONLY leaf items
+            if (!oItem.isHeader) {
+                if (!oItem.HodApprRemarks || oItem.CfoApprRemarks.trim() === "") {
+                    aItemsWithoutRemarks.push(oItem);
+                }
+            }
+        });
+
+        // ❌ Block reject if HOD remarks missing
+        if (aItemsWithoutRemarks.length > 0) {
+            console.log("❌ REJECTION BLOCKED - Missing HOD remarks");
+
+            var sErrorMessage =
+                "HOD Remarks are mandatory for rejection.\n\n" +
+                "Missing remarks for the following items:\n\n";
+
+            aItemsWithoutRemarks.forEach(function (oItem, iIndex) {
+                sErrorMessage +=
+                    (iIndex + 1) + ". " +
+                    "Approval: " + oItem.ApprovalNo +
+                    " | Item: " + oItem.ItemNum +
+                    " | inovice no: " + (oItem.DocNum || "") +
+                    "\n";
+            });
+
+            sap.m.MessageBox.error(sErrorMessage, {
+                title: "HOD Remarks Required"
+            });
+
+            // ⛔ Do NOT close dialog
             return;
-          }
-
-          console.log("✅ All items have remarks for rejection");
         }
 
-        // Close dialog
-        console.log("=== CLOSING DIALOG AND PROCESSING BULK ACTION ===");
-        this._oApprovalDialog.close();
+        console.log("✅ All selected items have HOD remarks");
+    }
 
-        // Call your existing bulk process method
-        console.log("=== CALLING _processBulkAction ===");
-        this._processBulkAction(this._aDialogSelectedItems, sActionType);
-      },
+    /* ================= PROCEED ================= */
+    console.log("=== CLOSING DIALOG ===");
+    this._oApprovalDialog.close();
+
+    console.log("=== CALLING _processBulkAction ===");
+    this._processBulkAction(aSelectedItems, sActionType);
+},
 
       handleDialogCancel: function () {
         console.log("=== handleDialogCancel CALLED ===");
@@ -883,7 +908,7 @@ sap.ui.define(
         oModel.create("/PaymentHeaderSet", oDeepPayload, {
           success: function () {
             sap.ui.core.BusyIndicator.hide();
-            sap.m.MessageToast.show("Approval sent successfully");
+            sap.m.MessageToast.show("submitted successfully");
           },
           error: function (oError) {
             sap.ui.core.BusyIndicator.hide();
