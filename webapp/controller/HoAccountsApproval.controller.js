@@ -1077,87 +1077,82 @@ onLayoutSelectionChange: function (oEvent) {
         return;
     }
 
-    /* ===== Get selected layout data ===== */
     var oCtx = oSelectedItem.getBindingContext("layoutModel");
-    if (!oCtx) {
-        return;
-    }
+    var sSelectedLayoutName = oCtx.getObject().name;
 
-    var oSelectedLayout = oCtx.getObject();
-    var sLayoutName = oSelectedLayout.name;
-
-    /* ===== Ignore static "Default" option ===== */
-    if (oSelectedLayout.isSystemDefault) {
-        console.log("Default layout selected (no backend read)");
-        return;
-    }
-
-    /* ===== Backend model ===== */
     var oModel = this.getView().getModel("oModel");
 
-    /* ===== Read layout details from backend ===== */
     oModel.read("/UserLayoutParametersSet", {
-        filters: [
-            new sap.ui.model.Filter(
-                "LayoutName",
-                sap.ui.model.FilterOperator.EQ,
-                sLayoutName
-            )
-        ],
         success: function (oData) {
 
-            /* ===== Console log full backend object ===== */
-            console.log("Selected Layout Name:", sLayoutName);
-            console.log("Backend layout data:", oData);
+            var oSelectedLayoutData = oData.results.find(function (oItem) {
+                return oItem.LayoutName === sSelectedLayoutName;
+            });
 
-            if (oData.results && oData.results.length > 0) {
-                console.log("Layout Fields Used:", oData.results[0]);
+            if (!oSelectedLayoutData) {
+                sap.m.MessageToast.show("Layout data not found");
+                return;
             }
 
-        },
+            console.log("✅ Selected Layout Data:", oSelectedLayoutData);
+
+            // 🔑 STORE selected backend layout
+            this._selectedBackendLayout = oSelectedLayoutData;
+
+        }.bind(this),
+
         error: function (oError) {
-            console.error("Failed to read layout details", oError);
+            console.error("Backend read failed", oError);
         }
     });
 }
 ,
+_applyBackendLayoutToTreeTable: function (oLayoutData) {
+
+    var oTreeTable = this.byId("idTreeTable");
+    if (!oTreeTable) {
+        return;
+    }
+
+    var mFieldMap = this._getColumnFieldMap();
+
+    oTreeTable.getColumns().forEach(function (oColumn) {
+
+        var sColumnId = oColumn.getId().split("--").pop();
+        var sBackendField = mFieldMap[sColumnId];
+
+        // Technical / unmapped columns → keep visible
+        if (!sBackendField) {
+            return;
+        }
+
+        // "X" → visible, "" → hidden
+        var bVisible = oLayoutData[sBackendField] === "X";
+        oColumn.setVisible(bVisible);
+
+    });
+}
+
+
+
+,
 
 onApplyLayout: function () {
-    if (!this._selectedLayout) {
+
+    if (!this._selectedBackendLayout) {
         sap.m.MessageToast.show("Please select a layout");
         return;
     }
 
-    var oTreeTable = this.byId("idTreeTable");
-    var aLayoutColumns = this._selectedLayout.columns || [];
-
-    // 1️⃣ Hide only BUSINESS columns (keep technical ones)
-    oTreeTable.getColumns().forEach(function (oColumn) {
-        var sColumnId = oColumn.getId().split("--").pop();
-
-        // Technical column → always visible
-        if (sColumnId === "colRowSelection") {
-            oColumn.setVisible(true);
-            return;
-        }
-
-        oColumn.setVisible(false);
-    });
-
-    // 2️⃣ Apply selected layout columns
-    aLayoutColumns.forEach(function (oColConfig) {
-        var oColumn = this.byId(oColConfig.id);
-        if (oColumn) {
-            oColumn.setVisible(oColConfig.visible !== false);
-        }
-    }.bind(this));
+    this._applyBackendLayoutToTreeTable(this._selectedBackendLayout);
 
     sap.m.MessageToast.show(
-        "Layout applied: " + this._selectedLayout.name
+        "Layout applied: " + this._selectedBackendLayout.LayoutName
     );
 
     this._oLayoutDialog.close();
 }
+
 ,
 
 onCloseLayoutDialog: function () {
