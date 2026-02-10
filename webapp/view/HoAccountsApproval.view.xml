@@ -492,39 +492,63 @@
                         hAlign="End"
                         filterProperty="PmApprAmt"
                     >
-                        <table:template>
-                            <m:Input
+                      
+                            <!-- <m:Input
                                 value="{treeData>PmApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
                                 type="Number"
                                 placeholder="0.00"
                                 textAlign="End"
                                 change="onPmApprAmountChange"
+                            /> -->
+                      <table:template>
+                            <m:Text
+                                text="{treeData>PmApprAmt}"
+                                visible="{= !${treeData>isHeader} }"
                             />
                         </table:template>
                     </table:Column>
 
                     <!-- ================= PM Status (Header=OverallStatus, Item=PmApprStatus) ================= -->
-                    <table:Column
+                    <!-- <table:Column
                         id="colPmStatus"
                         label="PM Status"
                         width="120px"
                         filterProperty="PmApprStatus"
                     >
-                        <table:template>
+                       <table:template>
                             <m:ObjectStatus
                                 text="{= ${treeData>isHeader} ? ${treeData>OverallStatus} : ${treeData>PmApprStatus} }"
                                 state="{path:'treeData>OverallStatus', formatter:'.formatter.statusState'}"
-                            />
+                            /> 
                         </table:template>
-                    </table:Column>
+                    </table:Column> -->
 
                     <!-- ================= PM Remark (Item) ================= -->
                     <table:Column
                         id="colPmRemark"
-                        label="hod   Remark"
+                        label="pm   Remark"
                         width="200px"
                         filterProperty="PmApprRemarks"
+                    >
+                        <table:template>
+                            <m:Text
+                                text="{treeData>PmApprRemarks}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template>
+                    </table:Column>
+
+
+
+
+
+
+                    <table:Column
+                        id="colhodRemark"
+                        label="hod manager  Remark"
+                        width="200px"
+                        filterProperty="HodApprRemarks"
                     >
                         <table:template>
                             <m:Input

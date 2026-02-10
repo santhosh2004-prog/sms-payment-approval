@@ -13,7 +13,7 @@
         <f:title>
             <f:DynamicPageTitle>
                 <f:heading>
-                    <m:Title text="Project Manager Approvals" />
+                    <m:Title text="Project Manager Payment Approvals" />
                 </f:heading>
             </f:DynamicPageTitle>
         </f:title>
@@ -73,6 +73,21 @@
                             class="rejectButton"
                             tooltip="Reject selected items"
                         />
+
+                        <m:Button
+                            icon="sap-icon://action-settings"
+                            text="Columns"
+                            type="Emphasized"
+                            press="onOpenColumnSettings"
+                            tooltip="Choose columns"
+                        />
+                        <m:Button
+                            icon="sap-icon://table-view"
+                            text="Select Layout"
+                            type="Emphasized"
+                            press="onOpenLayoutDialog"
+                            tooltip="Select column layout"
+                        />
                     </m:HBox>
                 </m:Toolbar>
 
@@ -88,23 +103,26 @@
                     class="sapUiSizeCompact"
                 >
                     <table:Column
+                        id="colRowSelection"
                         width="90px"
                         minWidth="48"
                         resizable="false"
                         hAlign="Center"
-                        
                     >
                         <table:template>
                             <m:CheckBox
                                 selected="{treeData>selected}"
                                 select="onSelectCheckBoxTreeTable"
-                               
                             />
                         </table:template>
                     </table:Column>
+
+                    <!-- ================= Approval Note No ================= -->
                     <table:Column
+                        id="idColApprovalNoteNo"
                         label="Approval Note No"
                         width="120px"
+                        filterProperty="ApprovalNo"
                     >
                         <table:template>
                             <m:Text
@@ -117,8 +135,10 @@
 
                     <!-- ================= Created On (Header) ================= -->
                     <table:Column
+                        id="colDate"
                         label="Date of Approval Note"
                         width="140px"
+                        filterProperty="CreatedOn"
                     >
                         <table:template>
                             <m:Text
@@ -130,8 +150,10 @@
 
                     <!-- ================= Profit Center (Header) ================= -->
                     <table:Column
+                        id="colProfitCenter"
                         label="Profit Center"
                         width="100px"
+                        filterProperty="ProfitCenter"
                     >
                         <table:template>
                             <m:Text
@@ -143,8 +165,10 @@
 
                     <!-- ================= Profit Center Name (Header) ================= -->
                     <table:Column
+                        id="colProfitCente"
                         label="Profit Center Name"
                         width="150px"
+                        filterProperty="ProfitCenterName"
                     >
                         <table:template>
                             <m:Text
@@ -156,18 +180,23 @@
 
                     <!-- ================= Vendor Code ================= -->
                     <table:Column
+                        id="colVendorCode"
                         label="Vendor Code"
                         width="120px"
+                        filterProperty="VendorCode"
                     >
                         <table:template>
                             <m:Text text="{treeData>VendorCode}" />
                         </table:template>
                     </table:Column>
 
-                    <!-- ================= Vendor Name ================= -->
+                    <!-- ================= Vendor Name =============
+                    ==== -->
                     <table:Column
+                        id="colVendorName"
                         label="Name of Vendor"
                         width="220px"
+                        filterProperty="VendorName"
                     >
                         <table:template>
                             <m:Text text="{treeData>VendorName}" />
@@ -176,8 +205,10 @@
 
                     <!-- ================= Liability Head (Item) ================= -->
                     <table:Column
+                        id="colLiabilityHead"
                         label="Liability Head (Dropdown)"
                         width="180px"
+                        filterProperty="LiabHead"
                     >
                         <table:template>
                             <m:Text
@@ -189,8 +220,10 @@
 
                     <!-- ================= Invoice Number (Item) ================= -->
                     <table:Column
+                        id="colInvoiceNo"
                         label="Invoice No."
                         width="120px"
+                        filterProperty="DocNum"
                     >
                         <table:template>
                             <m:Text
@@ -202,8 +235,10 @@
 
                     <!-- ================= Purchase Order (Item) ================= -->
                     <table:Column
+                        id="colPurchaseOrder"
                         label="Purchase Order"
                         width="120px"
+                        filterProperty="PurchDoc"
                     >
                         <table:template>
                             <m:Text
@@ -215,8 +250,10 @@
 
                     <!-- ================= Document Number (Item) ================= -->
                     <table:Column
+                        id="colDocumentNumber"
                         label="Document Number"
                         width="120px"
+                        filterProperty="DocNum"
                     >
                         <table:template>
                             <m:Text
@@ -228,8 +265,10 @@
 
                     <!-- ================= Document Date (Item) ================= -->
                     <table:Column
+                        id="colDocumentDate"
                         label="Document Date"
                         width="120px"
+                        filterProperty="DocDate"
                     >
                         <table:template>
                             <m:Text
@@ -241,8 +280,10 @@
 
                     <!-- ================= Posting Date (Item) ================= -->
                     <table:Column
+                        id="colPostingDate"
                         label="Posting Date"
                         width="120px"
+                        filterProperty="PostingDt"
                     >
                         <table:template>
                             <m:Text
@@ -254,9 +295,11 @@
 
                     <!-- ================= Gross Amount (Header + Item) ================= -->
                     <table:Column
+                        id="colGrossAmt"
                         label="Gross Amount"
                         width="130px"
                         hAlign="End"
+                        filterProperty="TotalBaseAmt"
                     >
                         <table:template>
                             <m:VBox>
@@ -275,9 +318,11 @@
 
                     <!-- ================= GST Amount (Header + Item) ================= -->
                     <table:Column
+                        id="colGST"
                         label="GST Amount"
                         width="130px"
                         hAlign="End"
+                        filterProperty="TotalGstAmt"
                     >
                         <table:template>
                             <m:VBox>
@@ -296,10 +341,11 @@
 
                     <!-- ================= TDS Amount (Header + Item) ================= -->
                     <table:Column
+                        id="colTDS"
                         label="TDS Amount"
-                        width="130px"
+                        width="200px"
                         hAlign="End"
-                        class="tdsAmountColumn"
+                        filterProperty="TotalTdsAmount"
                     >
                         <table:template>
                             <m:VBox>
@@ -312,10 +358,10 @@
                                     value="{treeData>TdsAmount}"
                                     visible="{= !${treeData>isHeader} }"
                                     type="Number"
+                                    width="100%"
                                     placeholder="0.00"
                                     textAlign="End"
                                     change="onTdsAmountChange"
-                                    description="₹"
                                 />
                             </m:VBox>
                         </table:template>
@@ -323,9 +369,11 @@
 
                     <!-- ================= Total Liability (Header + Item) ================= -->
                     <table:Column
+                        id="colTotalLiability"
                         label="Total Liability"
                         width="130px"
                         hAlign="End"
+                        filterProperty="TotalLiability"
                     >
                         <table:template>
                             <m:Text
@@ -336,9 +384,11 @@
 
                     <!-- ================= Amount Claimed (Header + Item) ================= -->
                     <table:Column
+                        id="colAmtClaimed"
                         label="Amount Claimed"
                         width="130px"
                         hAlign="End"
+                        filterProperty="TotalAmtClaimed"
                     >
                         <table:template>
                             <m:VBox>
@@ -357,9 +407,11 @@
 
                     <!-- ================= GST Amount reflected in GSTR 2A ================= -->
                     <table:Column
+                        id="colGst2aRef"
                         label="GST Amount reflected in GSTR 2A"
                         width="150px"
                         hAlign="End"
+                        filterProperty="Gst2aRef"
                     >
                         <table:template>
                             <m:Text
@@ -371,9 +423,11 @@
 
                     <!-- ================= GST Amount not reflected in GSTR 2A ================= -->
                     <table:Column
+                        id="colGst2aNref"
                         label="GST Amount not reflected in GSTR 2A"
                         width="150px"
                         hAlign="End"
+                        filterProperty="Gst2aNref"
                     >
                         <table:template>
                             <m:Text
@@ -385,9 +439,11 @@
 
                     <!-- ================= Amount already claimed in approval notes ================= -->
                     <table:Column
+                        id="colAmtAlreadyClaimed"
                         label="Amount already claimed in approval notes"
                         width="180px"
                         hAlign="End"
+                        filterProperty="AmtClaimed"
                     >
                         <table:template>
                             <m:Text
@@ -399,8 +455,10 @@
 
                     <!-- ================= Approval notes Pr. Ref ================= -->
                     <table:Column
+                        id="colAprnoRef"
                         label="Approval notes Pr. Ref"
                         width="150px"
+                        filterProperty="AprnoRef"
                     >
                         <table:template>
                             <m:Text
@@ -412,9 +470,11 @@
 
                     <!-- ================= Amount proposed to be paid ================= -->
                     <table:Column
+                        id="colAmtProposed"
                         label="Amount proposed to be paid"
                         width="150px"
                         hAlign="End"
+                        filterProperty="ProposedAmt"
                     >
                         <table:template>
                             <m:Text
@@ -426,9 +486,11 @@
 
                     <!-- ================= Amount approved by Project Manager ================= -->
                     <table:Column
+                        id="colPmApprAmt"
                         label="Amount approved by Project Manager"
-                        width="180px"
+                        width="200px"
                         hAlign="End"
+                        filterProperty="PmApprAmt"
                     >
                         <table:template>
                             <m:Input
@@ -438,15 +500,16 @@
                                 placeholder="0.00"
                                 textAlign="End"
                                 change="onPmApprAmountChange"
-                                description="₹"
                             />
                         </table:template>
                     </table:Column>
 
                     <!-- ================= PM Status (Header=OverallStatus, Item=PmApprStatus) ================= -->
-                    <table:Column
+                    <!-- <table:Column
+                        id="colPmStatus"
                         label="PM Status"
                         width="120px"
+                        filterProperty="PmApprStatus"
                     >
                         <table:template>
                             <m:ObjectStatus
@@ -454,12 +517,14 @@
                                 state="{path:'treeData>OverallStatus', formatter:'.formatter.statusState'}"
                             />
                         </table:template>
-                    </table:Column>
+                    </table:Column> -->
 
                     <!-- ================= PM Remark (Item) ================= -->
                     <table:Column
-                        label="PM Remark"
+                        id="colPmRemark"
+                        label="pm   Remark"
                         width="200px"
+                        filterProperty="PmApprRemarks"
                     >
                         <table:template>
                             <m:Input
@@ -474,8 +539,10 @@
 
                     <!-- ================= Bank Name (Item) ================= -->
                     <table:Column
+                        id="colBankName"
                         label="Bank Name"
                         width="200px"
+                        filterProperty="BankName"
                     >
                         <table:template>
                             <m:Text
@@ -487,8 +554,10 @@
 
                     <!-- ================= Account Number (Item) ================= -->
                     <table:Column
+                        id="colAccountNumber"
                         label="Account Number"
                         width="160px"
+                        filterProperty="AccountNumber"
                     >
                         <table:template>
                             <m:Text
@@ -500,8 +569,10 @@
 
                     <!-- ================= Currency (Header + Item) ================= -->
                     <table:Column
+                        id="colCurrency"
                         label="Currency"
                         width="80px"
+                        filterProperty="Currency"
                     >
                         <table:template>
                             <m:Text text="{treeData>Currency}" />
@@ -510,8 +581,10 @@
 
                     <!-- ================= Company Code (Header) ================= -->
                     <table:Column
+                        id="colCompanyCode"
                         label="Company Code"
                         width="120px"
+                        filterProperty="CompanyCode"
                     >
                         <table:template>
                             <m:Text
@@ -523,8 +596,10 @@
 
                     <!-- ================= Created By (Header) ================= -->
                     <table:Column
+                        id="colCreatedBy"
                         label="Created By"
                         width="120px"
+                        filterProperty="CreatedBy"
                     >
                         <table:template>
                             <m:Text
@@ -536,8 +611,10 @@
 
                     <!-- ================= Creation Time (Header) ================= -->
                     <table:Column
+                        id="colCreationTime"
                         label="Creation Time"
                         width="140px"
+                        filterProperty="CreatedAt"
                     >
                         <table:template>
                             <m:Text
@@ -549,8 +626,10 @@
 
                     <!-- ================= Item Count (Header) ================= -->
                     <table:Column
+                        id="colItemCount"
                         label="Item Count"
                         width="100px"
+                        filterProperty="ItemCount"
                     >
                         <table:template>
                             <m:Text
@@ -562,8 +641,10 @@
 
                     <!-- ================= Tax Number (Item) ================= -->
                     <table:Column
+                        id="colTaxNumber"
                         label="Tax Number"
                         width="120px"
+                        filterProperty="TaxNum"
                     >
                         <table:template>
                             <m:Text
@@ -575,8 +656,10 @@
 
                     <!-- ================= Bank Key (Item) ================= -->
                     <table:Column
+                        id="colBankKey"
                         label="Bank Key"
                         width="100px"
+                        filterProperty="BankKey"
                     >
                         <table:template>
                             <m:Text
@@ -588,8 +671,10 @@
 
                     <!-- ================= Reference Document (Item) ================= -->
                     <table:Column
+                        id="colReferenceDocument"
                         label="Reference Document"
                         width="150px"
+                        filterProperty="ReferenceDoc"
                     >
                         <table:template>
                             <m:Text
@@ -601,8 +686,10 @@
 
                     <!-- ================= GSTR1 Details (Item) ================= -->
                     <table:Column
+                        id="colGstr1Details"
                         label="GSTR1 Details"
                         width="150px"
+                        filterProperty="Gstr1Details"
                     >
                         <table:template>
                             <m:Text
@@ -614,8 +701,10 @@
 
                     <!-- ================= General Remark (Item) ================= -->
                     <table:Column
+                        id="colGeneralRemark"
                         label="General Remark"
                         width="200px"
+                        filterProperty="Remark"
                     >
                         <table:template>
                             <m:Text
@@ -627,8 +716,10 @@
 
                     <!-- ================= Account Holder (Item) ================= -->
                     <table:Column
+                        id="colAccountHolder"
                         label="Account Holder"
                         width="180px"
+                        filterProperty="AccountHolder"
                     >
                         <table:template>
                             <m:Text
@@ -639,17 +730,6 @@
                     </table:Column>
 
                     <!-- ================= Branch (Item) ================= -->
-                    <table:Column
-                        label="Branch"
-                        width="150px"
-                    >
-                        <table:template>
-                            <m:Text
-                                text="{treeData>Branch}"
-                                visible="{= !${treeData>isHeader} }"
-                            />
-                        </table:template>
-                    </table:Column>
                 </table:TreeTable>
             </m:VBox>
         </f:content>

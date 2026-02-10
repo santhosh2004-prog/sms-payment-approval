@@ -115,7 +115,9 @@ sap.ui.define([
                     { id: "colAmtProposed", label: "Amount proposed to be paid", visible: true },
                     { id: "colPmApprAmt", label: "Amount approved by Project Manager", visible: true },
                     { id: "colPmStatus", label: "PM Status", visible: true },
-                    { id: "colPmRemark", label: "PM Remark", visible: true },
+                    { id: "colPmRemark", label: "PM Remark", visible: true }
+                    ,
+                    { id: "colHodRemark", label: "HOD Remark", visible: true },
                     { id: "colBankName", label: "Bank Name", visible: true },
                     { id: "colAccountNumber", label: "Account Number", visible: true },
                     { id: "colCurrency", label: "Currency", visible: true },
@@ -783,10 +785,10 @@ onConfirmSaveLayout: function () {
                     UserId: "INCRESOL",
                     LayoutName: sLayoutName.toUpperCase(),
 
-                    ApprovalNo: "",
-                    ProfitCenter: "",
-                    ProfitCenterName: "",
-                    VendorCode: "",
+                    ApprovalNo:"X",
+                ProfitCenter: "X",
+                    ProfitCenterName: "X",
+                    VendorCode: "X",
                     VendorName: "",
                     CompanyCode: "",
                     CreationTime: "",
@@ -1014,53 +1016,84 @@ onOpenLayoutDialog: function () {
 
     var oModel = this.getView().getModel("oModel");
 
-    oModel.read("/UserLayoutParametersSet", {
-        success: function (oData) {
+    /* ===================================================== */
+    /* 1️⃣ READ LOGGED-IN USER (NO GLOBAL MODEL)              */
+    /* ===================================================== */
+    oModel.read("/UserApprovalLevelSet", {
+        success: function (oUserData) {
 
-            var aLayouts = [];
-
-            // 🔹 1️⃣ MANUAL DEFAULT ROW (ALWAYS FIRST)
-            aLayouts.push({
-                id: "DEFAULT",
-                name: "Default",
-                isDefault: true,
-                isManual: true   // helpful flag
-            });
-
-            // 🔹 2️⃣ BACKEND LAYOUTS
-            (oData.results || []).forEach(function (oItem) {
-                aLayouts.push({
-                    id: oItem.LayoutName,
-                    name: oItem.LayoutName,
-                    isDefault: false,
-                    isManual: false
-                });
-            });
-
-            var oLayoutModel = new sap.ui.model.json.JSONModel({
-                layouts: aLayouts
-            });
-
-            this.getView().setModel(oLayoutModel, "layoutModel");
-
-            // 🔹 Preselect Default row
-            var oTable = sap.ui.getCore().byId(
-                this.getView().getId() + "--layoutTable"
-            );
-
-            if (oTable) {
-                oTable.setSelectedItem(oTable.getItems()[0]);
+            if (!oUserData.results || !oUserData.results.length) {
+                sap.m.MessageBox.error("User not found");
+                return;
             }
 
-            this._oLayoutDialog.open();
+            var sUserName = oUserData.results[0].UserName;
+
+            console.log("🔐 Logged-in user:", sUserName);
+
+            /* ===================================================== */
+            /* 2️⃣ READ LAYOUTS FOR THIS USER ONLY                   */
+            /* ===================================================== */
+            oModel.read("/UserLayoutParametersSet", {
+                filters: [
+                    new sap.ui.model.Filter(
+                        "UserId",
+                        sap.ui.model.FilterOperator.EQ,
+                        sUserName
+                    )
+                ],
+                success: function (oLayoutData) {
+
+                    var aLayouts = [];
+
+                    // 🔹 DEFAULT (manual)
+                    aLayouts.push({
+                        id: "DEFAULT",
+                        name: "Default",
+                        isDefault: true,
+                        isManual: true
+                    });
+
+                    // 🔹 USER-SPECIFIC layouts
+                    (oLayoutData.results || []).forEach(function (oItem) {
+                        aLayouts.push({
+                            id: oItem.LayoutName,
+                            name: oItem.LayoutName,
+                            isDefault: false,
+                            isManual: false
+                        });
+                    });
+
+                    var oLayoutModel = new sap.ui.model.json.JSONModel({
+                        layouts: aLayouts
+                    });
+
+                    this.getView().setModel(oLayoutModel, "layoutModel");
+
+                    // Preselect Default
+                    var oTable = sap.ui.getCore().byId(
+                        this.getView().getId() + "--layoutTable"
+                    );
+                    if (oTable && oTable.getItems().length) {
+                        oTable.setSelectedItem(oTable.getItems()[0]);
+                    }
+
+                    this._oLayoutDialog.open();
+                }.bind(this),
+
+                error: function () {
+                    sap.m.MessageToast.show("Failed to load user layouts");
+                }
+            });
 
         }.bind(this),
 
         error: function () {
-            sap.m.MessageToast.show("Failed to load layouts");
+            sap.m.MessageBox.error("Failed to fetch user details");
         }
     });
 }
+
 
 
 
@@ -1249,7 +1282,8 @@ _captureDefaultLayout: function () {
     console.log("📌 Default layout captured:", this._defaultLayoutColumns);
 }
 
-,onDeleteLayout: function (oEvent) {
+,
+onDeleteLayout: function (oEvent) {
 
     // 1️⃣ Get clicked row
     var oButton = oEvent.getSource();
@@ -1264,52 +1298,82 @@ _captureDefaultLayout: function () {
     var oLayout = oCtx.getObject();
     var sLayoutName = oLayout.name;
 
-    // 3️⃣ Confirm delete
-    sap.m.MessageBox.confirm(
-        "Are you sure you want to delete layout \"" + sLayoutName + "\"?",
-        {
-            title: "Delete Layout",
-            actions: [
-                sap.m.MessageBox.Action.OK,
-                sap.m.MessageBox.Action.CANCEL
-            ],
-            onClose: function (sAction) {
+    var oView = this.getView();
+    var oODataModel = oView.getModel("oModel");
 
-                if (sAction !== sap.m.MessageBox.Action.OK) {
-                    return;
-                }
+    // 3️⃣ First READ user from backend
+    oODataModel.read("/UserApprovalLevelSet", {
+        success: function (oData) {
 
-                // 4️⃣ Backend DELETE call
-                var oODataModel = this.getView().getModel("oModel");
+            if (!oData.results || oData.results.length === 0) {
+                sap.m.MessageBox.error("User verification data not found");
+                return;
+            }
 
-                oODataModel.remove(
-                    "/UserLayoutParametersSet(LayoutName='" + encodeURIComponent(sLayoutName) + "')",
-                    {
-                        success: function () {
-                            // 5️⃣ Remove from UI model
-                            var oLayoutModel = this.getView().getModel("layoutModel");
-                            var aLayouts = oLayoutModel.getProperty("/layouts") || [];
+            // 🔹 Take first record
+            var sUserName = oData.results[0].UserName;
 
-                            oLayoutModel.setProperty(
-                                "/layouts",
-                                aLayouts.filter(function (oItem) {
-                                    return oItem.name !== sLayoutName;
-                                })
-                            );
+            // 4️⃣ Confirm delete
+            sap.m.MessageBox.confirm(
+                'Are you sure you want to delete layout "' + sLayoutName + '"?',
+                {
+                    title: "Delete Layout",
+                    actions: [
+                        sap.m.MessageBox.Action.OK,
+                        sap.m.MessageBox.Action.CANCEL
+                    ],
+                    onClose: function (sAction) {
 
-                            sap.m.MessageToast.show("Layout deleted successfully");
-                        }.bind(this),
-
-                        error: function (oError) {
-                            console.error("Delete failed", oError);
-                            sap.m.MessageToast.show("Failed to delete layout");
+                        if (sAction !== sap.m.MessageBox.Action.OK) {
+                            return;
                         }
+
+                        // 5️⃣ DELETE call with LayoutName + UserName
+                        var sPath =
+                            "/UserLayoutParametersSet(" +
+                            "UserId='" + encodeURIComponent(sUserName) + "'," +
+                            "LayoutName='" + encodeURIComponent(sLayoutName) + "'" +
+                            
+                            ")";
+                            
+
+                        oODataModel.remove(sPath, {
+                            success: function () {
+
+                                // 6️⃣ Update UI model
+                                var oLayoutModel = oView.getModel("layoutModel");
+                                var aLayouts = oLayoutModel.getProperty("/layouts") || [];
+
+                                oLayoutModel.setProperty(
+                                    "/layouts",
+                                    aLayouts.filter(function (oItem) {
+                                        return oItem.name !== sLayoutName;
+                                    })
+                                );
+
+                                sap.m.MessageToast.show("Layout deleted successfully");
+                            },
+
+                            error: function (oError) {
+                                console.error("Delete failed", oError);
+                                sap.m.MessageToast.show("Failed to delete layout");
+                            }
+                        });
                     }
-                );
-            }.bind(this)
+                }
+            );
+
+        }.bind(this),
+
+        error: function (oError) {
+            sap.m.MessageBox.error("Failed to fetch user data");
+            console.error(oError);
         }
-    );
+    });
 }
+
+
+
 
 
 /* ===================================================== */
