@@ -1,0 +1,57 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core">
+
+    <Dialog
+        id="layoutDialog"
+        title="Select Layout"
+        contentWidth="420px"
+        draggable="true"
+        resizable="true">
+
+        <VBox class="sapUiSmallMargin">
+
+            <!-- ===== Layout List ===== -->
+            <List
+                id="idLayoutList"
+                items="{layoutModel>/layouts}"
+                mode="SingleSelectLeft"
+                selectionChange="onLayoutSelectionChange">
+
+                <items>
+                    <StandardListItem
+                        title="{layoutModel>name}"
+                        icon="{= ${layoutModel>isDefault} ? 'sap-icon://favorite' : '' }"
+                        iconInset="false"
+                        type="Active"/>
+                </items>
+
+            </List>
+
+            <!-- ===== Default Layout Checkbox ===== -->
+            <CheckBox
+                id="idSetDefaultLayout"
+                text="Set as default layout"
+                class="sapUiSmallMarginTop"/>
+
+        </VBox>
+
+        <!-- ===== Apply Button ===== -->
+        <beginButton>
+            <Button
+                text="Apply"
+                type="Accept"
+                press="onApplyLayout"/>
+        </beginButton>
+
+        <!-- ===== Cancel Button ===== -->
+        <endButton>
+            <Button
+                text="Cancel"
+                type="Reject"
+                press="onCloseLayoutDialog"/>
+        </endButton>
+
+    </Dialog>
+
+</core:FragmentDefinition>
