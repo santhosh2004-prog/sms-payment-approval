@@ -5,30 +5,47 @@
     <Dialog
         id="layoutDialog"
         title="Select Layout"
-        contentWidth="420px"
         draggable="true"
-        resizable="true">
+        resizable="false"
+        contentWidth="420px">
 
         <VBox class="sapUiSmallMargin">
 
-            <!-- ===== Layout List ===== -->
-            <List
-                id="idLayoutList"
+            <Table
+                id="layoutTable"
                 items="{layoutModel>/layouts}"
                 mode="SingleSelectLeft"
+                includeItemInSelection="true"
                 selectionChange="onLayoutSelectionChange">
 
+                <columns>
+                    <Column>
+                        <Text text="Layout Name"/>
+                    </Column>
+
+                    <Column hAlign="Center">
+                        <Text text="Delete"/>
+                    </Column>
+                </columns>
+
                 <items>
-                    <StandardListItem
-                        title="{layoutModel>name}"
-                        icon="{= ${layoutModel>isDefault} ? 'sap-icon://favorite' : '' }"
-                        iconInset="false"
-                        type="Active"/>
+                    <ColumnListItem>
+                        <cells>
+                            <!-- Layout Name -->
+                            <Text text="{layoutModel>name}"/>
+
+                            <!-- Delete (hidden for Default row) -->
+                            <Button
+                                icon="sap-icon://delete"
+                                type="Reject"
+                                visible="{= ${layoutModel>isDefault} === false }"
+                                press="onDeleteLayout"/>
+                        </cells>
+                    </ColumnListItem>
                 </items>
 
-            </List>
+            </Table>
 
-            <!-- ===== Default Layout Checkbox ===== -->
             <CheckBox
                 id="idSetDefaultLayout"
                 text="Set as default layout"
@@ -36,20 +53,12 @@
 
         </VBox>
 
-        <!-- ===== Apply Button ===== -->
         <beginButton>
-            <Button
-                text="Apply"
-                type="Accept"
-                press="onApplyLayout"/>
+            <Button text="Apply" type="Accept" press="onApplyLayout"/>
         </beginButton>
 
-        <!-- ===== Cancel Button ===== -->
         <endButton>
-            <Button
-                text="Cancel"
-                type="Reject"
-                press="onCloseLayoutDialog"/>
+            <Button text="Cancel" type="Reject" press="onCloseLayoutDialog"/>
         </endButton>
 
     </Dialog>

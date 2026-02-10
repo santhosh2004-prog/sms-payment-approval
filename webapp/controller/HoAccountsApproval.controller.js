@@ -48,6 +48,10 @@ sap.ui.define([
                 }.bind(this)
             );
         }
+         if (!this._bDefaultLayoutCaptured) {
+        this._bDefaultLayoutCaptured = true;
+        this._captureDefaultLayout();
+    }
 
         /* ===============================
            2️⃣ DEFAULT layout binding
@@ -75,6 +79,8 @@ sap.ui.define([
             }
         }
     }.bind(this)
+
+
 });
 
 
@@ -997,9 +1003,9 @@ _getColumnFieldMap: function () {
 
 onOpenLayoutDialog: function () {
 
-    /* ===== Create fragment if not exists ===== */
     if (!this._oLayoutDialog) {
         this._oLayoutDialog = sap.ui.xmlfragment(
+            this.getView().getId(),
             "com.incresol.zpaymentworkflow.view.LayoutDialog",
             this
         );
@@ -1011,61 +1017,51 @@ onOpenLayoutDialog: function () {
     oModel.read("/UserLayoutParametersSet", {
         success: function (oData) {
 
-            console.log("Layouts from backend:", oData);
-
             var aLayouts = [];
-            var sDefaultLayoutName = null;
 
-            /* ===== Transform backend data ===== */
-            (oData.results || []).forEach(function (oItem) {
-                var bIsDefault = oItem.Default === "X";
-
-                aLayouts.push({
-                    name: oItem.LayoutName,
-                    isDefault: bIsDefault
-                });
-
-                if (bIsDefault) {
-                    sDefaultLayoutName = oItem.LayoutName;
-                }
+            // 🔹 1️⃣ MANUAL DEFAULT ROW (ALWAYS FIRST)
+            aLayouts.push({
+                id: "DEFAULT",
+                name: "Default",
+                isDefault: true,
+                isManual: true   // helpful flag
             });
 
-            /* ===== Set layout model ===== */
+            // 🔹 2️⃣ BACKEND LAYOUTS
+            (oData.results || []).forEach(function (oItem) {
+                aLayouts.push({
+                    id: oItem.LayoutName,
+                    name: oItem.LayoutName,
+                    isDefault: false,
+                    isManual: false
+                });
+            });
+
             var oLayoutModel = new sap.ui.model.json.JSONModel({
                 layouts: aLayouts
             });
+
             this.getView().setModel(oLayoutModel, "layoutModel");
 
-            /* ===== Preselect default layout in list ===== */
-            if (sDefaultLayoutName) {
-                var oList = sap.ui.getCore().byId("idLayoutList");
-                if (oList) {
-                    var aItems = oList.getItems();
-                    aItems.forEach(function (oItem) {
-                        if (oItem.getTitle() === sDefaultLayoutName) {
-                            oList.setSelectedItem(oItem);
-                        }
-                    });
-                }
+            // 🔹 Preselect Default row
+            var oTable = sap.ui.getCore().byId(
+                this.getView().getId() + "--layoutTable"
+            );
 
-                /* ===== Check default checkbox ===== */
-                var oDefaultCheckBox = sap.ui.getCore().byId("idSetDefaultLayout");
-                if (oDefaultCheckBox) {
-                    oDefaultCheckBox.setSelected(true);
-                }
+            if (oTable) {
+                oTable.setSelectedItem(oTable.getItems()[0]);
             }
 
-            /* ===== Open dialog AFTER binding ===== */
             this._oLayoutDialog.open();
 
         }.bind(this),
 
-        error: function (oError) {
-            console.error("Failed to load layouts", oError);
-            sap.m.MessageToast.show("Unable to load layouts");
+        error: function () {
+            sap.m.MessageToast.show("Failed to load layouts");
         }
     });
 }
+
 
 
 ,
@@ -1078,67 +1074,138 @@ onLayoutSelectionChange: function (oEvent) {
     }
 
     var oCtx = oSelectedItem.getBindingContext("layoutModel");
-    var sSelectedLayoutName = oCtx.getObject().name;
+    if (!oCtx) {
+        return;
+    }
+
+    var oSelectedObj = oCtx.getObject();
+    var sSelectedLayoutName = oSelectedObj.name;
+    
+
+    /* ===================================================== */
+    /* =============== DEFAULT OPTION ====================== */
+    /* ===================================================== */
+    if (oSelectedObj.isDefault) {
+
+        // mark default selected
+        this._isDefaultLayoutSelected = true;
+        this._selectedBackendLayout = null;
+
+        const aColumns = this.getView()
+            .getModel("columnModel")
+            .getProperty("/columns");
+
+        // apply default (local) visibility
+        aColumns.forEach(function (col) {
+            var oColumn = this.byId(col.id);
+            if (oColumn) {
+                oColumn.setVisible(col.visible);
+            }
+        }.bind(this));
+
+        console.log("Applied DEFAULT layout locally:", aColumns);
+        sap.m.MessageToast.show("Default layout selected");
+
+        return; // ⛔ stop backend call
+    }
+
+    /* ===================================================== */
+    /* =============== BACKEND LAYOUT ====================== */
+    /* ===================================================== */
+
+    this._isDefaultLayoutSelected = false;
 
     var oModel = this.getView().getModel("oModel");
 
     oModel.read("/UserLayoutParametersSet", {
         success: function (oData) {
 
-            var oSelectedLayoutData = oData.results.find(function (oItem) {
+            var oLayout = (oData.results || []).find(function (oItem) {
                 return oItem.LayoutName === sSelectedLayoutName;
             });
 
-            if (!oSelectedLayoutData) {
-                sap.m.MessageToast.show("Layout data not found");
+            if (!oLayout) {
+                sap.m.MessageToast.show("Layout not found");
                 return;
             }
 
-            console.log("✅ Selected Layout Data:", oSelectedLayoutData);
+            console.log("Layout rules (visibility only):", oLayout);
 
-            // 🔑 STORE selected backend layout
-            this._selectedBackendLayout = oSelectedLayoutData;
+            // store backend layout for Apply
+            this._selectedBackendLayout = oLayout;
 
         }.bind(this),
 
-        error: function (oError) {
-            console.error("Backend read failed", oError);
+        error: function () {
+            sap.m.MessageToast.show("Failed to load layout");
         }
     });
 }
+
 ,
 _applyBackendLayoutToTreeTable: function (oLayoutData) {
 
     var oTreeTable = this.byId("idTreeTable");
-    if (!oTreeTable) {
+    if (!oTreeTable || !oLayoutData) {
         return;
     }
 
     var mFieldMap = this._getColumnFieldMap();
 
+    // 🔹 Hide all mapped columns first
     oTreeTable.getColumns().forEach(function (oColumn) {
+        var sColumnId = oColumn.getId().split("--").pop();
+        if (mFieldMap[sColumnId]) {
+            oColumn.setVisible(false);
+        }
+    });
 
+    // 🔹 Apply backend visibility
+    oTreeTable.getColumns().forEach(function (oColumn) {
         var sColumnId = oColumn.getId().split("--").pop();
         var sBackendField = mFieldMap[sColumnId];
 
-        // Technical / unmapped columns → keep visible
         if (!sBackendField) {
             return;
         }
 
-        // "X" → visible, "" → hidden
-        var bVisible = oLayoutData[sBackendField] === "X";
-        oColumn.setVisible(bVisible);
-
+        oColumn.setVisible(oLayoutData[sBackendField] === "X");
     });
 }
-
-
 
 ,
 
 onApplyLayout: function () {
 
+    /* ===================================================== */
+    /* =============== DEFAULT LAYOUT ====================== */
+    /* ===================================================== */
+    if (this._isDefaultLayoutSelected) {
+
+        if (!this._defaultLayoutColumns) {
+            sap.m.MessageToast.show("Default layout not available");
+            return;
+        }
+
+        this._defaultLayoutColumns.forEach(function (col) {
+            var oColumn = this.byId(col.id);
+            if (oColumn) {
+                oColumn.setVisible(col.visible);
+            }
+        }.bind(this));
+
+        sap.m.MessageToast.show("Default layout applied");
+
+        if (this._oLayoutDialog) {
+            this._oLayoutDialog.close();
+        }
+
+        return;
+    }
+
+    /* ===================================================== */
+    /* =============== BACKEND LAYOUT ====================== */
+    /* ===================================================== */
     if (!this._selectedBackendLayout) {
         sap.m.MessageToast.show("Please select a layout");
         return;
@@ -1150,8 +1217,13 @@ onApplyLayout: function () {
         "Layout applied: " + this._selectedBackendLayout.LayoutName
     );
 
-    this._oLayoutDialog.close();
+    if (this._oLayoutDialog) {
+        this._oLayoutDialog.close();
+    }
 }
+
+
+
 
 ,
 
@@ -1160,6 +1232,85 @@ onCloseLayoutDialog: function () {
         this._oLayoutDialog.close();
     }
 }
+,
+_captureDefaultLayout: function () {
+    var oTreeTable = this.byId("idTreeTable");
+    if (!oTreeTable) {
+        return;
+    }
+
+    this._defaultLayoutColumns = oTreeTable.getColumns().map(function (oColumn) {
+        return {
+            id: oColumn.getId().split("--").pop(),
+            visible: oColumn.getVisible()
+        };
+    });
+
+    console.log("📌 Default layout captured:", this._defaultLayoutColumns);
+}
+
+,onDeleteLayout: function (oEvent) {
+
+    // 1️⃣ Get clicked row
+    var oButton = oEvent.getSource();
+    var oRow = oButton.getParent(); // ColumnListItem
+    var oCtx = oRow.getBindingContext("layoutModel");
+
+    if (!oCtx) {
+        return;
+    }
+
+    // 2️⃣ Get layout data
+    var oLayout = oCtx.getObject();
+    var sLayoutName = oLayout.name;
+
+    // 3️⃣ Confirm delete
+    sap.m.MessageBox.confirm(
+        "Are you sure you want to delete layout \"" + sLayoutName + "\"?",
+        {
+            title: "Delete Layout",
+            actions: [
+                sap.m.MessageBox.Action.OK,
+                sap.m.MessageBox.Action.CANCEL
+            ],
+            onClose: function (sAction) {
+
+                if (sAction !== sap.m.MessageBox.Action.OK) {
+                    return;
+                }
+
+                // 4️⃣ Backend DELETE call
+                var oODataModel = this.getView().getModel("oModel");
+
+                oODataModel.remove(
+                    "/UserLayoutParametersSet(LayoutName='" + encodeURIComponent(sLayoutName) + "')",
+                    {
+                        success: function () {
+                            // 5️⃣ Remove from UI model
+                            var oLayoutModel = this.getView().getModel("layoutModel");
+                            var aLayouts = oLayoutModel.getProperty("/layouts") || [];
+
+                            oLayoutModel.setProperty(
+                                "/layouts",
+                                aLayouts.filter(function (oItem) {
+                                    return oItem.name !== sLayoutName;
+                                })
+                            );
+
+                            sap.m.MessageToast.show("Layout deleted successfully");
+                        }.bind(this),
+
+                        error: function (oError) {
+                            console.error("Delete failed", oError);
+                            sap.m.MessageToast.show("Failed to delete layout");
+                        }
+                    }
+                );
+            }.bind(this)
+        }
+    );
+}
+
 
 /* ===================================================== */
 /* ================= END SELECT LAYOUT ================= */
