@@ -139,8 +139,8 @@
 .vendorColor1 {
   background: linear-gradient(
     90deg,
-    hsl(0, 100%, 94%) 0%,
-    #fbd0d0 100%
+    hwb(183 88% 5%) 0%,
+    #e8f9fa 100%
   ) !important;
 }
 
@@ -148,17 +148,18 @@
 .vendorColor2 {
   background: linear-gradient(
     90deg,
-    #f2faf3 0%,
-    #d5eed6 100%
+    #f9f9f9 0%,   /* light white */
+    #ffffff 100%  /* pure white */
   ) !important;
 }
+
 
 /* Vendor Color 3 – Soft Peach */
 .vendorColor3 {
   background: linear-gradient(
     90deg,
-    #fff7eb 0%,
-    #fdecd3 100%
+    #e1e0e0 0%,   /* light grey */
+    #d8d7d7 100%  /* darker grey */
   ) !important;
 }
 

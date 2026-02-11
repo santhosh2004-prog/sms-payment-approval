@@ -11,13 +11,12 @@
     <f:DynamicPage id="idPaymentDynamicPage">
         <!-- ================= TITLE ================= -->
         <f:title>
-            <f:DynamicPageTitle>
+            <f:DynamicPageTitle class="customTitleBackground">
                 <f:heading>
                     <m:Title text="HoAccounts Payment Approvals" />
                 </f:heading>
             </f:DynamicPageTitle>
         </f:title>
-
         <!-- ================= CONTENT ================= -->
         <f:content>
             <m:VBox
@@ -492,8 +491,7 @@
                         hAlign="End"
                         filterProperty="PmApprAmt"
                     >
-                      
-                            <!-- <m:Input
+                        <!-- <m:Input
                                 value="{treeData>PmApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
                                 type="Number"
@@ -501,7 +499,7 @@
                                 textAlign="End"
                                 change="onPmApprAmountChange"
                             /> -->
-                      <table:template>
+                        <table:template>
                             <m:Text
                                 text="{treeData>PmApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
@@ -538,11 +536,6 @@
                             />
                         </table:template>
                     </table:Column>
-
-
-
-
-
 
                     <table:Column
                         id="colhodRemark"

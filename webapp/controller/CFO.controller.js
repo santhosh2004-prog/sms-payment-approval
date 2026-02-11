@@ -21,7 +21,12 @@ sap.ui.define(
     
   
          onInit: function () {
-            console.log("ProjectManager controller initialized");
+            
+
+
+            var oRouter = this.getOwnerComponent().getRouter();
+
+    oRouter.getRoute("CFO").attachPatternMatched(this._validateUserRole, this);
             
             // Load custom CSS
             this._loadCustomCSS();
@@ -185,6 +190,50 @@ this.getView().setModel(oLayoutModel, "layoutModel");
     });
 }
 ,
+_validateUserRole: function () {
+
+            var oODataModel = this.getOwnerComponent().getModel("oModel");
+            var oRouter = this.getOwnerComponent().getRouter();
+            var that = this;
+
+            oODataModel.read("/UserApprovalLevelSet", {
+
+                success: function (oData) {
+
+                    if (!oData.results || oData.results.length === 0) {
+                        MessageBox.error("User verification data not found");
+                        oRouter.navTo("Home", {}, true);
+                        return;
+                    }
+
+                    var oUser = oData.results[0];
+
+                    // 🔹 Create Local Model
+                    var oLocalModel = new JSONModel({
+                        UserName: oUser.UserName,
+                        ApprovalLevel: oUser.ApprovalLevel
+                    });
+
+                    that.getView().setModel(oLocalModel, "localUser");
+
+                    // 🔹 Validate CFO Role
+                    if (oUser.ApprovalLevel !== "CFO") {
+                        MessageBox.error("Unauthorized Access");
+                       oRouter.navTo("NotFound", {}, true);
+                       oRouter.initialize();
+
+                    }
+                },
+
+                error: function () {
+                    MessageBox.error("Failed to verify user");
+                  oRouter.navTo("NotFound", {}, true);
+                  oRouter.initialize();
+
+                }
+
+            });
+        },
 
         _loadCustomCSS: function() {
             // Ensure CSS is loaded

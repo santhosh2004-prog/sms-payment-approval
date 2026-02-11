@@ -11,7 +11,9 @@ sap.ui.define([
     return Controller.extend("com.incresol.zpaymentworkflow.controller.HoAccountsApproval", {
 
          onInit: function () {
-            console.log("ProjectManager controller initialized");
+        var oRouter = this.getOwnerComponent().getRouter();
+    oRouter.getRoute("HoAccountsApproval")
+        .attachPatternMatched(this._validateUserRole, this);
             
             // Load custom CSS
             this._loadCustomCSS();
@@ -174,6 +176,49 @@ this.getView().setModel(oLayoutModel, "layoutModel");
         };
     });
 }
+,_validateUserRole: function () {
+
+    var oODataModel = this.getOwnerComponent().getModel("oModel");
+    var oRouter = this.getOwnerComponent().getRouter();
+    var that = this;
+
+    oODataModel.read("/UserApprovalLevelSet", {
+
+        success: function (oData) {
+
+            if (!oData.results || oData.results.length === 0) {
+                sap.m.MessageBox.error("User verification data not found");
+                oRouter.navTo("Home", {}, true);
+                return;
+            }
+
+            var oUser = oData.results[0];
+
+            // 🔹 Local model
+            var oLocalModel = new sap.ui.model.json.JSONModel({
+                UserName: oUser.UserName,
+                ApprovalLevel: oUser.ApprovalLevel
+            });
+
+            that.getView().setModel(oLocalModel, "localUser");
+
+            // 🔹 Role Validation
+            if (oUser.ApprovalLevel !== "HOD") {
+                sap.m.MessageBox.error("Unauthorized Access");
+                oRouter.navTo("NotFound", {}, true);
+
+            }
+        },
+
+        error: function () {
+            sap.m.MessageBox.error("Failed to verify user");
+            oRouter.navTo("NotFound", {}, true);
+
+        }
+
+    });
+}
+
 ,
 
         _loadCustomCSS: function() {

@@ -116,9 +116,9 @@
         "viewPath": "com.incresol.zpaymentworkflow.view",
         "async": true,
         "transition": "slide",
-         "bypassed": {
-    "target": "Home"
-  }
+        "bypassed": {
+          "target": "NotFound"
+        }
       },
 
       "routes": [
@@ -137,7 +137,6 @@
           "name": "ProjectManager",
           "target": "ProjectManager"
         },
-
         {
           "pattern": "cfo",
           "name": "CFO",
@@ -146,16 +145,18 @@
         {
           "pattern": "auditor",
           "name": "Auditor",
-          "target": "Auditor"}
-
-,        {
+          "target": "Auditor"
+        },
+        {
           "pattern": "director",
           "name": "Director",
           "target": "Director"
+        },
+        {
+          "pattern": "notFound",
+          "name": "NotFound",
+          "target": "NotFound"
         }
-
-
-
       ],
 
       "targets": {
@@ -168,15 +169,18 @@
         "ProjectManager": {
           "viewName": "ProjectManager"
         },
-         "CFO": {
+        "CFO": {
           "viewName": "CFO"
         },
-         "Auditor": {
+        "Auditor": {
           "viewName": "Auditor"
-         }
-         ,
-          "Director": {
-            "viewName": "Director"}
+        },
+        "Director": {
+          "viewName": "Director"
+        },
+        "NotFound": {
+          "viewName": "NotFound"
+        }
       }
     },
 

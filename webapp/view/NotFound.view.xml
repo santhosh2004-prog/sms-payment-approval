@@ -1,0 +1,22 @@
+<mvc:View
+    controllerName="com.incresol.zpaymentworkflow.controller.NotFound"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m">
+
+    <MessagePage
+        title="404"
+        text="Page Not Found"
+        description="The page you are trying to access does not exist or you are not authorized to view it."
+        showNavButton="true"
+        navButtonPress="onNavBack">
+
+        <!-- <buttons>
+            <Button
+                text="Go to Home"
+                type="Emphasized"
+                press="onNavBack"/>
+        </buttons> -->
+
+    </MessagePage>
+
+</mvc:View>

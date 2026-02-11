@@ -21,7 +21,9 @@ sap.ui.define(
       "com.incresol.zpaymentworkflow.controller.ProjectManager",
       {
        onInit: function () {
-            console.log("ProjectManager controller initialized");
+            var oRouter = this.getOwnerComponent().getRouter();
+    oRouter.getRoute("ProjectManager")
+        .attachPatternMatched(this._validateUserRole, this);
             
             // Load custom CSS
             this._loadCustomCSS();
@@ -182,6 +184,48 @@ this.getView().setModel(oLayoutModel, "layoutModel");
         };
     });
 }
+,
+_validateUserRole: function () {
+
+    var oODataModel = this.getOwnerComponent().getModel("oModel");
+    var oRouter = this.getOwnerComponent().getRouter();
+    var that = this;
+
+    oODataModel.read("/UserApprovalLevelSet", {
+
+        success: function (oData) {
+
+            if (!oData.results || oData.results.length === 0) {
+                oRouter.navTo("NotFound", {}, true);
+                return;
+            }
+
+            var oUser = oData.results[0];
+
+            var oLocalModel = new sap.ui.model.json.JSONModel({
+                UserName: oUser.UserName,
+                ApprovalLevel: oUser.ApprovalLevel
+            });
+
+            that.getView().setModel(oLocalModel, "localUser");
+
+            // 🔐 Role Validation
+            if (oUser.ApprovalLevel !== "PM") {
+                oRouter.navTo("NotFound", {}, true);
+                oRouter.initialize();
+            }
+        },
+
+        error: function () {
+            oRouter.navTo("NotFound", {}, true);
+            oRouter.initialize();
+
+        }
+
+    });
+}
+
+
 ,
 
         _loadCustomCSS: function() {

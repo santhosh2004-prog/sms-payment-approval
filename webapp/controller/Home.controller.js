@@ -39,9 +39,15 @@ sap.ui.define([
           switch (oUser.ApprovalLevel) {
 
             case "PM":
-              oRouter.navTo("ProjectManager", {}, true);
-              break;
 
+  // 🔹 Double check user role before navigation
+  if (oUser && oUser.ApprovalLevel === "PM") {
+      oRouter.navTo("ProjectManager", {}, true);
+  } else {
+      MessageBox.error("User is not authorized as Project Manager");
+  }
+
+  break;
             case "HOD":
               oRouter.navTo("HoAccountsApproval", {}, true);
               break;
