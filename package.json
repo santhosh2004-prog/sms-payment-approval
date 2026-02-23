@@ -8,12 +8,12 @@
     "sapui5"
   ],
   "main": "webapp/index.html",
-  "dependencies": {},
   "devDependencies": {
-    "@ui5/cli": "^4.0.16",
-    "@sap/ux-ui5-tooling": "1",
     "@sap-ux/ui5-middleware-fe-mockserver": "2",
-    "rimraf": "^5.0.5"
+    "@sap/ux-ui5-tooling": "1",
+    "@ui5/cli": "^4.0.16",
+    "rimraf": "^5.0.5",
+    "ui5-task-nwabap-deployer": "^2.1.1"
   },
   "scripts": {
     "start": "fiori run --open \"test/flp.html#app-preview\"",

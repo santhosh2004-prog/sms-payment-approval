@@ -100,6 +100,7 @@
                     enableBusyIndicator="true"
                     width="100%"
                     class="sapUiSizeCompact"
+                    visibleRowCount="15"
                 >
                     <table:Column
                         id="colRowSelection"

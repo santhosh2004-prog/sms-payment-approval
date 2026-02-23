@@ -293,43 +293,61 @@ this.getView().setModel(oLayoutModel, "layoutModel");
         },
 
         _loadPaymentData: function () {
-            var oModel = this.getView().getModel("oModel");
+    var oModel = this.getView().getModel("oModel");
 
-            if (!oModel) {
-                MessageToast.show("OData model 'oModel' not available");
+    if (!oModel) {
+        MessageToast.show("OData model 'oModel' not available");
+        return;
+    }
+
+    oModel.read("/PaymentHeaderSet", {
+        urlParameters: {
+            "$expand": "ToItems"
+        },
+
+        success: function (oData) {
+            console.log("PaymentHeaderSet raw response:", oData);
+
+            var aHeaders = (oData && oData.results) ? oData.results : [];
+            console.log("Total Headers count:", aHeaders.length);
+
+            if (aHeaders.length > 0) {
+                console.log("Sample header:", aHeaders[0]);
+                console.log("Sample header ToItems:", aHeaders[0].ToItems);
+            }
+
+            /* ===================================================== */
+            /* 🔹 FILTER ONLY CFO APPROVED RECORDS                  */
+            /* ===================================================== */
+            var aFilteredHeaders = aHeaders.filter(function (oHeader) {
+                return oHeader.OverallStatus === "CFO_APPR";
+            });
+
+            console.log("CFO_APPR Headers count:", aFilteredHeaders.length);
+
+            /* ===================================================== */
+            /* 🔹 IF NO CFO APPROVED RECORDS                        */
+            /* ===================================================== */
+            if (aFilteredHeaders.length === 0) {
+                MessageToast.show("No CFO Approved records found");
+                this.getView().getModel("treeData").setData({ treeData: [] });
                 return;
             }
 
-            oModel.read("/PaymentHeaderSet", {
-                urlParameters: {
-                    "$expand": "ToItems"
-                },
-                success: function (oData) {
-                    console.log("PaymentHeaderSet raw response:", oData);
+            /* ===================================================== */
+            /* 🔹 BIND ONLY FILTERED DATA                           */
+            /* ===================================================== */
+            this._transformExpandedHeaderToTree(aFilteredHeaders);
 
-                    var aHeaders = (oData && oData.results) ? oData.results : [];
-                    console.log("Headers count:", aHeaders.length);
+        }.bind(this),
 
-                    if (aHeaders.length > 0) {
-                        console.log("Sample header:", aHeaders[0]);
-                        console.log("Sample header ToItems:", aHeaders[0].ToItems);
-                    }
-
-                    if (aHeaders.length === 0) {
-                        MessageToast.show("No payment data available");
-                        this.getView().getModel("treeData").setData({ treeData: [] });
-                        return;
-                    }
-
-                    this._transformExpandedHeaderToTree(aHeaders);
-                }.bind(this),
-                error: function (oError) {
-                    console.error("Error loading PaymentHeaderSet with expand:", oError);
-                    this.getView().getModel("treeData").setData({ treeData: [] });
-                    MessageToast.show("Error loading payment data");
-                }.bind(this)
-            });
-        },
+        error: function (oError) {
+            console.error("Error loading PaymentHeaderSet with expand:", oError);
+            this.getView().getModel("treeData").setData({ treeData: [] });
+            MessageToast.show("Error loading payment data");
+        }.bind(this)
+    });
+},
 
         _transformExpandedHeaderToTree: function (aHeaders) {
             var aTreeData = aHeaders.map(function (oHeader) {

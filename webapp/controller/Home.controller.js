@@ -55,6 +55,12 @@ sap.ui.define([
             case "CFO":
               oRouter.navTo("CFO", {}, true);
               break;
+            case "AUD":
+              oRouter.navTo("Auditor", {}, true);
+              break;
+            case "DIR":
+              oRouter.navTo("Director", {}, true);
+              break;  
 
             default:
               MessageBox.error("No navigation configured for approval level: " + oUser.ApprovalLevel);

@@ -19,7 +19,7 @@ builder:
           ignoreCertError: true
           certificatePath: "C:\Users\user\Downloads\smsCert.crt"
         app:
-          name: ZPAYMENTAPPROVAL
+          name: ZPAYMENTAPPROVA
           description: Payment Approval Workflow
           package: ZFIORI
           transport: SMXK900729
