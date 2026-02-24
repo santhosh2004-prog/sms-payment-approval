@@ -344,7 +344,7 @@ _validateUserRole: function () {
             }
         },
 
-       _loadPaymentData: function () {
+  _loadPaymentData: function () {
     var oModel = this.getView().getModel("oModel");
 
     if (!oModel) {
@@ -363,24 +363,41 @@ _validateUserRole: function () {
             var aHeaders = (oData && oData.results) ? oData.results : [];
             console.log("Total Headers count:", aHeaders.length);
 
-            if (aHeaders.length > 0) {
-                console.log("Sample header:", aHeaders[0]);
-                console.log("Sample header ToItems:", aHeaders[0].ToItems);
-            }
+            /* ===================================================== */
+            /* 🔹 FILTER ITEMS WHERE HOD STATUS = APPROVED          */
+            /* ===================================================== */
+
+            var aFilteredHeaders = aHeaders.map(function (oHeader) {
+
+                var aItems = (oHeader.ToItems && oHeader.ToItems.results)
+                    ? oHeader.ToItems.results
+                    : [];
+
+                // 🔹 Keep only items where HOD Approval Status = APPROVED
+                var aApprovedItems = aItems.filter(function (oItem) {
+                    return oItem.HodApprStatus === "APPROVED";
+                });
+
+                // 🔹 If no approved items → skip header
+                if (aApprovedItems.length === 0) {
+                    return null;
+                }
+
+                // 🔹 Return cloned header with only approved items
+                return Object.assign({}, oHeader, {
+                    ToItems: {
+                        results: aApprovedItems
+                    }
+                });
+
+            }).filter(Boolean); // remove null headers
+
+            console.log("Headers with HOD Approved items:", aFilteredHeaders.length);
 
             /* ===================================================== */
-            /* 🔹 FILTER ONLY HOD APPROVED RECORDS                  */
+            /* 🔹 IF NO APPROVED RECORDS                             */
             /* ===================================================== */
-            var aFilteredHeaders = aHeaders.filter(function (oHeader) {
 
-                return oHeader.OverallStatus === "HOD_APPR";
-            });
-
-            console.log("HOD_APPR Headers count:", aFilteredHeaders.length);
-
-            /* ===================================================== */
-            /* 🔹 IF NO HOD APPROVED RECORDS                        */
-            /* ===================================================== */
             if (aFilteredHeaders.length === 0) {
                 MessageToast.show("No HOD Approved records found");
                 this.getView().getModel("treeData").setData({ treeData: [] });
@@ -388,8 +405,9 @@ _validateUserRole: function () {
             }
 
             /* ===================================================== */
-            /* 🔹 BIND ONLY FILTERED DATA                           */
+            /* 🔹 BIND FILTERED DATA                                 */
             /* ===================================================== */
+
             this._transformExpandedHeaderToTree(aFilteredHeaders);
 
         }.bind(this),
@@ -1837,6 +1855,7 @@ onDeleteLayout: function (oEvent) {
           ).toString(),
           PmApprOn: new Date().toISOString(),
           PmUserId: sCurrentUser,
+          CfoApprOn: new Date().toISOString(),
           Currency: (oItem.Currency || "INR").toString(),
           AccountNumber: (oItem.AccountNumber || "").toString(),
           BankName: (oItem.BankName || "").toString(),

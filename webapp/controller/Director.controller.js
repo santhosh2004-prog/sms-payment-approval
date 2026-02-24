@@ -12,7 +12,10 @@ sap.ui.define([
 
       
             onInit: function () {
-            console.log("ProjectManager controller initialized");
+                 var oRouter = this.getOwnerComponent().getRouter();
+
+    oRouter.getRoute("Director").attachPatternMatched(this._validateUserRole, this);
+            console.log("Director controller initialized");
             
             // Load custom CSS
             this._loadCustomCSS();
@@ -202,6 +205,53 @@ this.getView().setModel(oLayoutModel, "layoutModel");
                 document.head.appendChild(oLink2);
             }
         },
+        _validateUserRole: function () {
+
+            var oODataModel = this.getOwnerComponent().getModel("oModel");
+            var oRouter = this.getOwnerComponent().getRouter();
+            var that = this;
+
+            oODataModel.read("/UserApprovalLevelSet", {
+
+                success: function (oData) {
+
+                    if (!oData.results || oData.results.length === 0) {
+                        MessageBox.error("User verification data not found");
+                        oRouter.navTo("Home", {}, true);
+                        return;
+                    }
+
+                    var oUser = oData.results[0];
+
+                    // 🔹 Create Local Model
+                    var oLocalModel = new JSONModel({
+                        UserName: oUser.UserName,
+                        ApprovalLevel: oUser.ApprovalLevel
+                    });
+
+                    that.getView().setModel(oLocalModel, "localUser");
+
+                    // 🔹 Validate Director Role
+                    if (oUser.ApprovalLevel !== "DIR") {
+                        MessageBox.error("Unauthorized Access");
+                       oRouter.navTo("NotFound", {}, true);
+                       oRouter.initialize();
+
+                    }
+                },
+
+                error: function () {
+                    MessageBox.error("Failed to verify user");
+                  oRouter.navTo("NotFound", {}, true);
+                  oRouter.initialize();
+
+                }
+
+            });
+        }
+        ,
+        
+
         _applyVendorColorsToTreeTable: function () {
   var oTreeTable = this.byId("idTreeTable");
   if (!oTreeTable) {
@@ -291,7 +341,7 @@ this.getView().setModel(oLayoutModel, "layoutModel");
             }
         },
 
-       _loadPaymentData: function () {
+_loadPaymentData: function () {
     var oModel = this.getView().getModel("oModel");
 
     if (!oModel) {
@@ -310,23 +360,41 @@ this.getView().setModel(oLayoutModel, "layoutModel");
             var aHeaders = (oData && oData.results) ? oData.results : [];
             console.log("Total Headers count:", aHeaders.length);
 
-            if (aHeaders.length > 0) {
-                console.log("Sample header:", aHeaders[0]);
-                console.log("Sample header ToItems:", aHeaders[0].ToItems);
-            }
-
             /* ===================================================== */
-            /* 🔹 FILTER ONLY AUDITOR APPROVED RECORDS               */
+            /* 🔹 FILTER ITEMS WHERE AUDITOR STATUS = APPROVED      */
             /* ===================================================== */
-            var aFilteredHeaders = aHeaders.filter(function (oHeader) {
-                return oHeader.OverallStatus === "AUD_APPR";
-            });
 
-            console.log("AUD_APPR Headers count:", aFilteredHeaders.length);
+            var aFilteredHeaders = aHeaders.map(function (oHeader) {
+
+                var aItems = (oHeader.ToItems && oHeader.ToItems.results)
+                    ? oHeader.ToItems.results
+                    : [];
+
+                // 🔹 Keep only items where Auditor Approval Status = APPROVED
+                var aApprovedItems = aItems.filter(function (oItem) {
+                    return oItem.AudApprStatus === "APPROVED";
+                });
+
+                // 🔹 If no approved items → skip header
+                if (aApprovedItems.length === 0) {
+                    return null;
+                }
+
+                // 🔹 Return cloned header with only approved items
+                return Object.assign({}, oHeader, {
+                    ToItems: {
+                        results: aApprovedItems
+                    }
+                });
+
+            }).filter(Boolean); // remove null headers
+
+            console.log("Headers with Auditor Approved items:", aFilteredHeaders.length);
 
             /* ===================================================== */
             /* 🔹 IF NO APPROVED RECORDS                             */
             /* ===================================================== */
+
             if (aFilteredHeaders.length === 0) {
                 MessageToast.show("No Auditor Approved records found");
                 this.getView().getModel("treeData").setData({ treeData: [] });
@@ -334,8 +402,9 @@ this.getView().setModel(oLayoutModel, "layoutModel");
             }
 
             /* ===================================================== */
-            /* 🔹 BIND ONLY FILTERED DATA                            */
+            /* 🔹 BIND FILTERED DATA                                 */
             /* ===================================================== */
+
             this._transformExpandedHeaderToTree(aFilteredHeaders);
 
         }.bind(this),

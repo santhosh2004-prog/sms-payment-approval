@@ -330,7 +330,7 @@ this.getView().setModel(oLayoutModel, "layoutModel");
             }
         },
 
-       _loadPaymentData: function () {
+_loadPaymentData: function () {
     var oModel = this.getView().getModel("oModel");
 
     if (!oModel) {
@@ -349,23 +349,41 @@ this.getView().setModel(oLayoutModel, "layoutModel");
             var aHeaders = (oData && oData.results) ? oData.results : [];
             console.log("Total Headers count:", aHeaders.length);
 
-            if (aHeaders.length > 0) {
-                console.log("Sample header:", aHeaders[0]);
-                console.log("Sample header ToItems:", aHeaders[0].ToItems);
-            }
+            /* ===================================================== */
+            /* 🔹 FILTER ONLY ITEMS WHERE PM STATUS = APPROVED      */
+            /* ===================================================== */
+
+            var aFilteredHeaders = aHeaders.map(function (oHeader) {
+
+                var aItems = (oHeader.ToItems && oHeader.ToItems.results)
+                    ? oHeader.ToItems.results
+                    : [];
+
+                // 🔹 Keep only items where PM Approval Status = APPROVED
+                var aApprovedItems = aItems.filter(function (oItem) {
+                    return oItem.PmApprStatus === "APPROVED";
+                });
+
+                // 🔹 If no approved items → skip header
+                if (aApprovedItems.length === 0) {
+                    return null;
+                }
+
+                // 🔹 Return cloned header with only approved items
+                return Object.assign({}, oHeader, {
+                    ToItems: {
+                        results: aApprovedItems
+                    }
+                });
+
+            }).filter(Boolean); // remove null headers
+
+            console.log("Headers with PM Approved items:", aFilteredHeaders.length);
 
             /* ===================================================== */
-            /* 🔹 FILTER ONLY PM APPROVED RECORDS                    */
+            /* 🔹 IF NO APPROVED RECORDS                             */
             /* ===================================================== */
-            var aFilteredHeaders = aHeaders.filter(function (oHeader) {
-                return oHeader.OverallStatus === "PM_APPR";
-            });
 
-            console.log("PM_APPR Headers count:", aFilteredHeaders.length);
-
-            /* ===================================================== */
-            /* 🔹 IF NO PM APPROVED RECORDS                          */
-            /* ===================================================== */
             if (aFilteredHeaders.length === 0) {
                 MessageToast.show("No PM Approved records found");
                 this.getView().getModel("treeData").setData({ treeData: [] });
@@ -373,8 +391,9 @@ this.getView().setModel(oLayoutModel, "layoutModel");
             }
 
             /* ===================================================== */
-            /* 🔹 BIND ONLY FILTERED DATA                            */
+            /* 🔹 BIND FILTERED DATA                                 */
             /* ===================================================== */
+
             this._transformExpandedHeaderToTree(aFilteredHeaders);
 
         }.bind(this),
@@ -1672,9 +1691,9 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
 
                     /* ===== HOD ===== */
                     HodApprAmt: dec(oItem.HodApprAmt),
-                    HodUserId: "",
-                    HodApprStatus: "",
-                    HodApprOn: null,
+                    HodUserId: oItem.HodUserId || "",
+                    HodApprStatus: oItem.HodApprStatus || "",
+                    HodApprOn: toEdmDateTime(oItem.HodApprOn),
                     HodApprRemarks: oItem.HodApprRemarks || "",
 
                     /* ===== CFO ===== */
@@ -1781,7 +1800,6 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
                 TotalLiability: (parseFloat(oItem.TotalLiability || 0)).toString(),
                 AmtClaimed: (parseFloat(oItem.AmtClaimed || 0)).toString(),
                 PmApprAmt: (parseFloat(oItem.PmApprAmt || 0)).toString(),
-                PmApprStatus: sStatus,
                 HodApprStatus: sStatus ,
                 PmApprRemarks: (oItem.PmApprRemarks || sDefaultRemarks || "").toString(),
                 HodApprRemarks: (oItem.HodApprRemarks || sDefaultRemarks || "").toString(),

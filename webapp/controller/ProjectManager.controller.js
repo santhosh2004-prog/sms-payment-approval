@@ -336,8 +336,7 @@ _validateUserRole: function () {
                 }.bind(this), 1000);
             }
         },
-
-       _loadPaymentData: function () {
+_loadPaymentData: function () {
     var oModel = this.getView().getModel("oModel");
 
     if (!oModel) {
@@ -356,32 +355,51 @@ _validateUserRole: function () {
             var aHeaders = (oData && oData.results) ? oData.results : [];
             console.log("Total Headers count:", aHeaders.length);
 
-            if (aHeaders.length > 0) {
-                console.log("Sample header:", aHeaders[0]);
-                console.log("Sample header ToItems:", aHeaders[0].ToItems);
-            }
+            /* ===================================================== */
+            /* 🔹 FILTER ITEMS WHERE PM APPROVAL IS BLANK           */
+            /* ===================================================== */
+
+            var aFilteredHeaders = aHeaders.map(function (oHeader) {
+
+                var aItems = (oHeader.ToItems && oHeader.ToItems.results)
+                    ? oHeader.ToItems.results
+                    : [];
+
+                // 🔹 Keep only items where PM Approval Status is blank
+                var aPendingItems = aItems.filter(function (oItem) {
+                    return !oItem.PmApprStatus || oItem.PmApprStatus === "";
+                });
+
+                // 🔹 If no pending items → skip this header
+                if (aPendingItems.length === 0) {
+                    return null;
+                }
+
+                // 🔹 Clone header and attach only pending items
+                return Object.assign({}, oHeader, {
+                    ToItems: {
+                        results: aPendingItems
+                    }
+                });
+
+            }).filter(Boolean); // remove null headers
+
+            console.log("Headers with pending PM items:", aFilteredHeaders.length);
 
             /* ===================================================== */
-            /* 🔹 FILTER ONLY CREATED STATUS RECORDS                 */
+            /* 🔹 IF NO PENDING RECORDS                              */
             /* ===================================================== */
-            var aFilteredHeaders = aHeaders.filter(function (oHeader) {
-                return oHeader.OverallStatus === "CREATED";
-            });
 
-            console.log("CREATED Headers count:", aFilteredHeaders.length);
-
-            /* ===================================================== */
-            /* 🔹 IF NO CREATED RECORDS                              */
-            /* ===================================================== */
             if (aFilteredHeaders.length === 0) {
-                MessageToast.show("No Created records found");
+                MessageToast.show("No pending PM approval items found");
                 this.getView().getModel("treeData").setData({ treeData: [] });
                 return;
             }
 
             /* ===================================================== */
-            /* 🔹 BIND ONLY FILTERED DATA                            */
+            /* 🔹 BIND FILTERED DATA                                 */
             /* ===================================================== */
+
             this._transformExpandedHeaderToTree(aFilteredHeaders);
 
         }.bind(this),

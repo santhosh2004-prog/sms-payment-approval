@@ -11,7 +11,7 @@
     <f:DynamicPage id="idPaymentDynamicPage">
         <!-- ================= TITLE ================= -->
         <f:title>
-            <f:DynamicPageTitle class="customTitleBackground">
+            <f:DynamicPageTitle >
                 <f:heading>
                     <m:Title text="HoAccounts Payment Approvals" />
                 </f:heading>
