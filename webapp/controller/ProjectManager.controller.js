@@ -717,7 +717,7 @@ onRejectButtonPress: function () {
         aSelectedItems.forEach(function (oItem) {
             // Validate ONLY leaf items
             if (!oItem.isHeader) {
-                if (!oItem.HodApprRemarks || oItem.HodApprRemarks.trim() === "") {
+                if (!oItem.PmApprRemarks || oItem.PmApprRemarks.trim() === "") {
                     aItemsWithoutRemarks.push(oItem);
                 }
             }
@@ -725,10 +725,10 @@ onRejectButtonPress: function () {
 
         // ❌ Block reject if HOD remarks missing
         if (aItemsWithoutRemarks.length > 0) {
-            console.log("❌ REJECTION BLOCKED - Missing HOD remarks");
+            console.log("❌ REJECTION BLOCKED - Missing Project Manager remarks");
 
             var sErrorMessage =
-                "HOD Remarks are mandatory for rejection.\n\n" +
+                "Project Manager Remarks are mandatory for rejection.\n\n" +
                 "Missing remarks for the following items:\n\n";
 
             aItemsWithoutRemarks.forEach(function (oItem, iIndex) {
@@ -741,14 +741,14 @@ onRejectButtonPress: function () {
             });
 
             sap.m.MessageBox.error(sErrorMessage, {
-                title: "HOD Remarks Required"
+                title: "Project Manager Remarks Required"
             });
 
             // ⛔ Do NOT close dialog
             return;
         }
 
-        console.log("✅ All selected items have HOD remarks");
+        console.log("✅ All selected items have Project Manager remarks");
     }
 
     /* ================= PROCEED ================= */
@@ -869,8 +869,9 @@ onConfirmSaveLayout: function () {
                 var mFieldMap = this._getColumnFieldMap();
 
                 /* ===== 4. Base Payload (ALL FIELDS) ===== */
+                 var sUserId = this.getView().getModel("localUser").getProperty("/UserName");
                 var oPayload = {
-                    UserId: "INCRESOL",
+                    UserId: sUserId,
                     LayoutName: sLayoutName.toUpperCase(),
 
                     ApprovalNo:"X",
@@ -1104,8 +1105,14 @@ onOpenLayoutDialog: function () {
 
     var oModel = this.getView().getModel("oModel");
 
+    // 🔹 Get Logged-in User
+    var sUserId = this.getView()
+        .getModel("localUser")
+        .getProperty("/UserName");
+
     oModel.read("/UserLayoutParametersSet", {
         success: function (oData) {
+          var sUserName = oData.results[0].UserName;
 
             var aLayouts = [];
 
@@ -1114,17 +1121,23 @@ onOpenLayoutDialog: function () {
                 id: "DEFAULT",
                 name: "Default",
                 isDefault: true,
-                isManual: true   // helpful flag
+                isManual: true
             });
 
-            // 🔹 2️⃣ BACKEND LAYOUTS
+            // 🔹 2️⃣ FILTER BY USERNAME
             (oData.results || []).forEach(function (oItem) {
-                aLayouts.push({
-                    id: oItem.LayoutName,
-                    name: oItem.LayoutName,
-                    isDefault: false,
-                    isManual: false
-                });
+
+                if (oItem.UserId === sUserId) {   // 🔹 USER CHECK
+
+                    aLayouts.push({
+                        id: oItem.LayoutName,
+                        name: oItem.LayoutName,
+                        isDefault: false,
+                        isManual: false
+                    });
+
+                }
+
             });
 
             var oLayoutModel = new sap.ui.model.json.JSONModel({
@@ -1133,12 +1146,11 @@ onOpenLayoutDialog: function () {
 
             this.getView().setModel(oLayoutModel, "layoutModel");
 
-            // 🔹 Preselect Default row
             var oTable = sap.ui.getCore().byId(
                 this.getView().getId() + "--layoutTable"
             );
 
-            if (oTable) {
+            if (oTable && oTable.getItems().length > 0) {
                 oTable.setSelectedItem(oTable.getItems()[0]);
             }
 
@@ -1678,92 +1690,113 @@ onDeleteLayout: function (oEvent) {
 
             /* ================= ITEMS ================= */
 
-            ToItems: {
-              results: aPayloadItems.map(function (oItem) {
-                return {
-                  ApprovalNo: sApprovalNo,
-                  ProfitCenter: oItem.ProfitCenter || "",
-                  TaxNum: oItem.TaxNum || "",
-                  ProfitCenterName: oItem.ProfitCenterName || "",
-                  BankKey: oItem.BankKey || "",
-                  VendorCode: sVendorCode,
-                  VendorName: oItem.VendorName || "",
-                  DocNum: oItem.DocNum || "",
-                  ItemNum: String(oItem.ItemNum),
-                  LiabHead: oItem.LiabHead || "",
-                  ReferenceDoc: oItem.ReferenceDoc || "",
-                  PurchDoc: oItem.PurchDoc || "",
+          ToItems: {
+            results: aPayloadItems.map(function (oItem) {
+              var oMappedItem = {
+                ApprovalNo: sApprovalNo,
+                Completed: "X",
+                ProfitCenter: oItem.ProfitCenter || "",
+                TaxNum: oItem.TaxNum || "",
+                ProfitCenterName: oItem.ProfitCenterName || "",
+                CreatedOn: null,
+                BankKey: oItem.BankKey || "",
+                VendorCode: sVendorCode,
+                VendorName: oItem.VendorName || "",
+                DocNum: oItem.DocNum || "",
+                ItemNum: String(oItem.ItemNum),
+                LiabHead: oItem.LiabHead || "",
+                ReferenceDoc: oItem.ReferenceDoc || "",
+                PurchDoc: oItem.PurchDoc || "",
 
-                  DocDate: toEdmDateTime(oItem.DocDate),
-                  PostingDt: toEdmDateTime(oItem.PostingDt),
+                DocDate: toEdmDateTime(oItem.DocDate),
+                PostingDt: toEdmDateTime(oItem.PostingDt),
 
-                  GrossAmt: dec(oItem.GrossAmt),
-                  BaseAmt: dec(oItem.BaseAmt),
-                  GstAmt: dec(oItem.GstAmt),
-                  TdsAmount: dec(oItem.TdsAmount),
-                  TotalLiability: dec(oItem.TotalLiability),
+                GrossAmt: dec(oItem.GrossAmt),
+                BaseAmt: dec(oItem.BaseAmt),
+                GstAmt: dec(oItem.GstAmt),
+                TdsAmount: dec(oItem.TdsAmount),
+                TotalLiability: dec(oItem.TotalLiability),
 
-                  Gst2aRef: dec(oItem.Gst2aRef),
-                  Gst2aNref: dec(oItem.Gst2aNref),
-                  AmtClaimed: dec(oItem.AmtClaimed),
-                  AprnoRef: oItem.AprnoRef || "",
-                  ProposedAmt: dec(oItem.ProposedAmt),
+                Gst2aRef: dec(oItem.Gst2aRef),
+                Gst2aNref: dec(oItem.Gst2aNref),
+                AmtClaimed: dec(oItem.AmtClaimed),
+                AprnoRef: oItem.AprnoRef || "",
+                ProposedAmt: dec(oItem.ProposedAmt),
 
-                  Currency: oItem.Currency || "",
-                  Gstr1Details: oItem.Gstr1Details || "",
-                  Remark: oItem.Remark || "",
+                Currency: oItem.Currency || "",
+                Gstr1Details: oItem.Gstr1Details || "",
+                Remark: oItem.Remark || "",
 
-                  AccountHolder: oItem.AccountHolder || "",
-                  AccountNumber: oItem.AccountNumber || "",
-                  BankName: oItem.BankName || "",
-                  Branch: oItem.Branch || "",
+                AccountHolder: oItem.AccountHolder || "",
+                AccountNumber: oItem.AccountNumber || "",
+                BankName: oItem.BankName || "",
+                Branch: oItem.Branch || "",
 
-                  /* ===== PM ===== */
-                  PmApprAmt: dec(oItem.PmApprAmt),
-                  PmUserId: oItem.PmUserId || "",
-                  PmApprStatus: oItem.PmApprStatus || "",
-                  PmApprOn: toEdmDateTime(oItem.PmApprOn),
-                  PmApprRemarks: oItem.PmApprRemarks || "",
+                /* ===== PM ===== */
+                PmApprAmt: dec(oItem.PmApprAmt),
+                PmUserId: oItem.PmUserId || "",
+                PmApprStatus: oItem.PmApprStatus || "",
+                PmApprOn: toEdmDateTime(oItem.PmApprOn),
+                PmApprRemarks: oItem.PmApprRemarks || "",
 
-                  /* ===== HOD ===== */
-                  HodApprAmt: dec(oItem.HodApprAmt),
-                  HodUserId: "",
-                  HodApprStatus: "",
-                  HodApprOn: null,
-                  HodApprRemarks: "",
+                /* ===== HOD ===== */
+                HodApprAmt: dec(oItem.HodApprAmt || "0.00"),
+                HodUserId: oItem.HodUserId || "",
+                HodApprStatus: oItem.HodApprStatus || "",
 
-                  /* ===== CFO ===== */
-                  CfoApprAmt: "0.00",
-                  CfoUserId: "",
-                  CfoApprStatus: "",
-                  CfoApprOn: null,
-                  CfoApprRemarks: "",
+                HodApprOn: oItem.HodApprOn
+                  ? toEdmDateTime(oItem.HodApprOn)
+                  : null,
+                HodApprRemarks: oItem.HodApprRemarks || "",
 
-                  /* ===== AUDITOR ===== */
-                  AudApprAmt: "0.00",
-                  AudUserId: "",
-                  AudApprStatus: "",
-                  AudApprOn: null,
-                  AudApprRemarks: "",
+                /* ===== CFO ===== */
+                CfoApprAmt: dec(oItem.CfoApprAmt || "0.00"),
+                CfoUserId: oItem.CfoUserId || "",
+                CfoApprStatus: oItem.CfoApprStatus || "",
+                CfoApprOn: oItem.CfoApprOn
+                  ? toEdmDateTime(oItem.CfoApprOn)
+                  : null,
+                CfoApprRemarks: oItem.CfoApprRemarks || "",
 
-                  /* ===== DIRECTOR ===== */
-                  DirApprAmt: "0.00",
-                  DirUserId: "",
-                  DirApprStatus: "",
-                  DirApprOn: null,
-                  DirApprRemarks: "",
+                /* ===== AUDITOR ===== */
+                AudApprAmt: dec(oItem.AudApprAmt || "0.00"),
+                AudUserId: oItem.AudUserId || "",
+                AudApprStatus: oItem.AudApprStatus || "",
+                AudApprOn: oItem.AudApprOn
+                  ? toEdmDateTime(oItem.AudApprOn)
+                  : null,
+                AudApprRemarks: oItem.AudApprRemarks || "",
 
-                  ModeOfPayment: "",
-                  UtrNo: "",
-                  PaidAmount1: "0.00",
-                  PaymentDate1: null,
-                  PaidAmount2: "0.00",
-                  PaymentDate2: null,
-                  TotalBalOut: "0.00",
-                  BalancePayable: "0.00",
-                };
-              }),
-            },
+                /* ===== DIRECTOR ===== */
+                DirApprAmt: dec(oItem.DirApprAmt || "0.00"),
+                DirUserId: oItem.DirUserId || "",
+                DirApprStatus: oItem.DirApprStatus || "",
+                DirApprOn: oItem.DirApprOn
+                  ? toEdmDateTime(oItem.DirApprOn)
+                  : null,
+                DirApprRemarks: oItem.DirApprRemarks || "",
+
+                ModeOfPayment: "",
+                BalancePayable: "0.00",
+                TotalBalOut: dec(oItem.TotalBalOut || "0.00"),
+                RejectionIndicator: "",
+                RejectedBy: "",
+                RejectionDate: null,
+                RejectorDesignation: "",
+              };
+
+              /* ================= REJECTION FIELDS (ONLY IF REJECT) ================= */
+
+              if (sActionType === "REJECT") {
+                oMappedItem.RejectionIndicator = "X";
+                oMappedItem.RejectedBy = oItem.CfoUserId || "";
+                oMappedItem.RejectionDate = toEdmDateTime(new Date());
+                oMappedItem.RejectorDesignation = "CFO";
+              }
+
+              return oMappedItem;
+            }),
+          },
           };
 
           console.log("🚀 FINAL DEEP CREATE PAYLOAD (MATCHED)");
@@ -1774,8 +1807,9 @@ onDeleteLayout: function (oEvent) {
           oModel.create("/PaymentHeaderSet", oDeepPayload, {
             success: function () {
               sap.ui.core.BusyIndicator.hide();
-              sap.m.MessageToast.show("Approval sent successfully");
-            },
+              sap.m.MessageToast.show("Submitted successfully");
+              this._loadPaymentData()
+            }.bind(this),
             error: function (oError) {
               sap.ui.core.BusyIndicator.hide();
               console.error("❌ Deep create failed", oError);
@@ -1789,8 +1823,9 @@ onDeleteLayout: function (oEvent) {
           console.log("Input Item:", oItem);
           console.log("Status:", sStatus);
           console.log("Default Remarks:", sDefaultRemarks);
+          var sUserId = this.getView().getModel("localUser").getProperty("/UserName");
 
-          var sCurrentUser = this._getCurrentUserId();
+          var sCurrentUser = sUserId ? sUserId.toString().trim() : "UNKNOWN_USER";
 
           // Ensure required key fields are properly formatted
           var sApprovalNo = (oItem.ApprovalNo || "").toString().trim();

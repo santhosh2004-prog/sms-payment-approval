@@ -372,14 +372,43 @@ _loadPaymentData: function () {
 
                 // 🔹 Keep only items where Auditor Approval Status = APPROVED
                 var aApprovedItems = aItems.filter(function (oItem) {
-                    return oItem.AudApprStatus === "APPROVED";
-                });
+                    // 🔹 Store all approval statuses in order
+                    var aStatuses = [
+                      oItem.Pmapprstatus,
+                      oItem.HodApprStatus,
+                      oItem.CfoApprStatus,
+                      oItem.AudApprStatus,
+                      oItem.DirApprStatus,
+                    ];
 
-                // 🔹 If no approved items → skip header
-                if (aApprovedItems.length === 0) {
+                    var sLastApprovedStatus = null;
+
+                    // 🔹 Loop to find last approved stage
+                    for (var i = 0; i < aStatuses.length; i++) {
+                      if (aStatuses[i] === "APPROVED") {
+                        sLastApprovedStatus = i // store index of last approved
+                      }
+                    }
+
+                    // 🔹 If last approved stage is Director → Skip
+                    // Director index = 4 (PMA=0, HOD=1, CFO=2, AUD=3, DIR=4)
+                    if (sLastApprovedStatus >= 4) {
+                      return false; // Skip this item
+                    }
+                    var iTotalLiability = parseFloat(oItem.TotalLiability) || 0;
+                    if (iTotalLiability > 1000000){
+                      return false; // Skip if total liability is zero
+                    }
+                   
+                    
+
+                    return true; // Keep other items
+                  });
+
+                  // 🔹 If no approved items → skip header
+                  if (aApprovedItems.length === 0) {
                     return null;
-                }
-
+                  }
                 // 🔹 Return cloned header with only approved items
                 return Object.assign({}, oHeader, {
                     ToItems: {
@@ -722,7 +751,7 @@ onRejectButtonPress: function () {
         aSelectedItems.forEach(function (oItem) {
             // Validate ONLY leaf items
             if (!oItem.isHeader) {
-                if (!oItem.HodApprRemarks || oItem.HodApprRemarks.trim() === "") {
+                if (!oItem.DirApprRemarks || oItem.DirApprRemarks.trim() === "") {
                     aItemsWithoutRemarks.push(oItem);
                 }
             }
@@ -730,10 +759,10 @@ onRejectButtonPress: function () {
 
         // ❌ Block reject if HOD remarks missing
         if (aItemsWithoutRemarks.length > 0) {
-            console.log("❌ REJECTION BLOCKED - Missing HOD remarks");
+            console.log("❌ REJECTION BLOCKED - Missing Director remarks");
 
             var sErrorMessage =
-                "HOD Remarks are mandatory for rejection.\n\n" +
+                "Director Remarks are mandatory for rejection.\n\n" +
                 "Missing remarks for the following items:\n\n";
 
             aItemsWithoutRemarks.forEach(function (oItem, iIndex) {
@@ -872,10 +901,11 @@ onConfirmSaveLayout: function () {
 
                 /* ===== 3. Column → Backend Field Map ===== */
                 var mFieldMap = this._getColumnFieldMap();
+                 var sUserId = this.getView().getModel("localUser").getProperty("/UserName");
 
                 /* ===== 4. Base Payload (ALL FIELDS) ===== */
                 var oPayload = {
-                    UserId: "INCRESOL",
+                    UserId: sUserId,
                     LayoutName: sLayoutName.toUpperCase(),
 
                     ApprovalNo:"X",
@@ -1109,8 +1139,14 @@ onOpenLayoutDialog: function () {
 
     var oModel = this.getView().getModel("oModel");
 
+    // 🔹 Get Logged-in User
+    var sUserId = this.getView()
+        .getModel("localUser")
+        .getProperty("/UserName");
+
     oModel.read("/UserLayoutParametersSet", {
         success: function (oData) {
+          var sUserName = oData.results[0].UserName;
 
             var aLayouts = [];
 
@@ -1119,17 +1155,23 @@ onOpenLayoutDialog: function () {
                 id: "DEFAULT",
                 name: "Default",
                 isDefault: true,
-                isManual: true   // helpful flag
+                isManual: true
             });
 
-            // 🔹 2️⃣ BACKEND LAYOUTS
+            // 🔹 2️⃣ FILTER BY USERNAME
             (oData.results || []).forEach(function (oItem) {
-                aLayouts.push({
-                    id: oItem.LayoutName,
-                    name: oItem.LayoutName,
-                    isDefault: false,
-                    isManual: false
-                });
+
+                if (oItem.UserId === sUserId) {   // 🔹 USER CHECK
+
+                    aLayouts.push({
+                        id: oItem.LayoutName,
+                        name: oItem.LayoutName,
+                        isDefault: false,
+                        isManual: false
+                    });
+
+                }
+
             });
 
             var oLayoutModel = new sap.ui.model.json.JSONModel({
@@ -1138,12 +1180,11 @@ onOpenLayoutDialog: function () {
 
             this.getView().setModel(oLayoutModel, "layoutModel");
 
-            // 🔹 Preselect Default row
             var oTable = sap.ui.getCore().byId(
                 this.getView().getId() + "--layoutTable"
             );
 
-            if (oTable) {
+            if (oTable && oTable.getItems().length > 0) {
                 oTable.setSelectedItem(oTable.getItems()[0]);
             }
 
@@ -1156,7 +1197,6 @@ onOpenLayoutDialog: function () {
         }
     });
 }
-
 
 
 ,
@@ -1628,8 +1668,9 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
 
           ToItems: {
             results: aPayloadItems.map(function (oItem) {
-              return {
+              var oMappedItem = {
                 ApprovalNo: sApprovalNo,
+                Completed: "X",
                 ProfitCenter: oItem.ProfitCenter || "",
                 TaxNum: oItem.TaxNum || "",
                 ProfitCenterName: oItem.ProfitCenterName || "",
@@ -1673,13 +1714,14 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
                 PmApprOn: toEdmDateTime(oItem.PmApprOn),
                 PmApprRemarks: oItem.PmApprRemarks || "",
 
-               /* ===== HOD ===== */
+                /* ===== HOD ===== */
                 HodApprAmt: dec(oItem.HodApprAmt || "0.00"),
                 HodUserId: oItem.HodUserId || "",
                 HodApprStatus: oItem.HodApprStatus || "",
+
                 HodApprOn: oItem.HodApprOn
-                ? toEdmDateTime(oItem.HodApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.HodApprOn)
+                  : null,
                 HodApprRemarks: oItem.HodApprRemarks || "",
 
                 /* ===== CFO ===== */
@@ -1687,8 +1729,8 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
                 CfoUserId: oItem.CfoUserId || "",
                 CfoApprStatus: oItem.CfoApprStatus || "",
                 CfoApprOn: oItem.CfoApprOn
-                ? toEdmDateTime(oItem.CfoApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.CfoApprOn)
+                  : null,
                 CfoApprRemarks: oItem.CfoApprRemarks || "",
 
                 /* ===== AUDITOR ===== */
@@ -1696,8 +1738,8 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
                 AudUserId: oItem.AudUserId || "",
                 AudApprStatus: oItem.AudApprStatus || "",
                 AudApprOn: oItem.AudApprOn
-                ? toEdmDateTime(oItem.AudApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.AudApprOn)
+                  : null,
                 AudApprRemarks: oItem.AudApprRemarks || "",
 
                 /* ===== DIRECTOR ===== */
@@ -1705,20 +1747,29 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
                 DirUserId: oItem.DirUserId || "",
                 DirApprStatus: oItem.DirApprStatus || "",
                 DirApprOn: oItem.DirApprOn
-                ? toEdmDateTime(oItem.DirApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.DirApprOn)
+                  : null,
                 DirApprRemarks: oItem.DirApprRemarks || "",
 
-
                 ModeOfPayment: "",
-                UtrNo: "",
-                PaidAmount1: "0.00",
-                PaymentDate1: null,
-                PaidAmount2: "0.00",
-                PaymentDate2: null,
-                TotalBalOut: "0.00",
                 BalancePayable: "0.00",
+                TotalBalOut: dec(oItem.TotalBalOut || "0.00"),
+                RejectionIndicator: "",
+                RejectedBy: "",
+                RejectionDate: null,
+                RejectorDesignation: "",
               };
+
+              /* ================= REJECTION FIELDS (ONLY IF REJECT) ================= */
+
+              if (sActionType === "REJECT") {
+                oMappedItem.RejectionIndicator = "X";
+                oMappedItem.RejectedBy = oItem.CfoUserId || "";
+                oMappedItem.RejectionDate = toEdmDateTime(new Date());
+                oMappedItem.RejectorDesignation = "CFO";
+              }
+
+              return oMappedItem;
             }),
           },
         };
@@ -1732,7 +1783,8 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
           success: function () {
             sap.ui.core.BusyIndicator.hide();
             sap.m.MessageToast.show("Submitted successfully");
-          },
+            this._loadPaymentData();
+          }.bind(this),
           error: function (oError) {
             sap.ui.core.BusyIndicator.hide();
             console.error("❌ Deep create failed", oError);
@@ -1794,13 +1846,28 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
 
           DirApprAmt: parseFloat(oItem.DirApprAmt || 0).toString(),
           PmApprStatus: sStatus,
+          HodApprStatus: sStatus,
+          CfoApprStatus: sStatus,
+          AudApprStatus: sStatus,
+         DirApprStatus: sStatus,
           PmApprRemarks: (
             oItem.PmApprRemarks ||
             sDefaultRemarks ||
             ""
           ).toString(),
-          PmApprOn: new Date().toISOString(),
-          PmUserId: sCurrentUser,
+           PmApprOn: new Date().toISOString(),
+            HodApprOn: new Date().toISOString(),
+            CfoApprOn: new Date().toISOString(),
+            AudApprOn: new Date().toISOString(),
+            
+            
+            
+            DirApprOn: new Date().toISOString(),
+           PmUserId: sCurrentUser,
+            HodUserId: sCurrentUser,
+            CfoUserId: sCurrentUser,
+            AudUserId: sCurrentUser,
+              DirUserId: sCurrentUser,
           Currency: (oItem.Currency || "INR").toString(),
           AccountNumber: (oItem.AccountNumber || "").toString(),
           BankName: (oItem.BankName || "").toString(),
@@ -1835,74 +1902,7 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
           Branch: (oItem.Branch || "").toString(),
         };
 
-        console.log("=== COMPLETE PAYLOAD ITEM CREATED ===");
-        console.log("Payload Item Details:");
-        console.log("  ApprovalNo:", oPayloadItem.ApprovalNo);
-        console.log("  VendorCode:", oPayloadItem.VendorCode);
-        console.log("  ItemNum:", oPayloadItem.ItemNum);
-        console.log("  VendorName:", oPayloadItem.VendorName);
-        console.log("  DocNum:", oPayloadItem.DocNum);
-        console.log("  LiabHead:", oPayloadItem.LiabHead);
-        console.log("  PurchDoc:", oPayloadItem.PurchDoc);
-        console.log("  DocDate:", oPayloadItem.DocDate);
-        console.log("  PostingDt:", oPayloadItem.PostingDt);
-        console.log("  BaseAmt:", oPayloadItem.BaseAmt);
-        console.log("  GstAmt:", oPayloadItem.GstAmt);
-        console.log("  TdsAmount:", oPayloadItem.TdsAmount);
-        console.log("  TotalLiability:", oPayloadItem.TotalLiability);
-        console.log("  AmtClaimed:", oPayloadItem.AmtClaimed);
-        console.log("  PmApprAmt:", oPayloadItem.PmApprAmt);
-        console.log("  PmApprStatus:", oPayloadItem.PmApprStatus);
-        console.log("  PmApprRemarks:", oPayloadItem.PmApprRemarks);
-        console.log("  PmApprOn:", oPayloadItem.PmApprOn);
-        console.log("  PmUserId:", oPayloadItem.PmUserId);
-        console.log("  Currency:", oPayloadItem.Currency);
-        console.log("  AccountNumber:", oPayloadItem.AccountNumber);
-        console.log("  BankName:", oPayloadItem.BankName);
-        console.log("  TaxNum:", oPayloadItem.TaxNum);
-        console.log("  BankKey:", oPayloadItem.BankKey);
-        console.log("  ReferenceDoc:", oPayloadItem.ReferenceDoc);
-        console.log("  Gst2aRef:", oPayloadItem.Gst2aRef);
-        console.log("  Gst2aNref:", oPayloadItem.Gst2aNref);
-        console.log("  AprnoRef:", oPayloadItem.AprnoRef);
-        console.log("  Gstr1Details:", oPayloadItem.Gstr1Details);
-        console.log("  Remark:", oPayloadItem.Remark);
-        console.log("  AccountHolder:", oPayloadItem.AccountHolder);
-        console.log("  Branch:", oPayloadItem.Branch);
-        console.log("=== FULL PAYLOAD ITEM (JSON) ===");
-        console.log(JSON.stringify(oPayloadItem, null, 2));
-        console.log("=== USER REQUESTED PAYLOAD FORMAT ===");
-        console.log("ItemNum:", oPayloadItem.ItemNum);
-        console.log("VendorName:", oPayloadItem.VendorName);
-        console.log("DocNum:", oPayloadItem.DocNum);
-        console.log("LiabHead:", oPayloadItem.LiabHead);
-        console.log("PurchDoc:", oPayloadItem.PurchDoc);
-        console.log("DocDate:", oPayloadItem.DocDate);
-        console.log("PostingDt:", oPayloadItem.PostingDt);
-        console.log("BaseAmt:", oPayloadItem.BaseAmt);
-        console.log("GstAmt:", oPayloadItem.GstAmt);
-        console.log("TdsAmount:", oPayloadItem.TdsAmount);
-        console.log("TotalLiability:", oPayloadItem.TotalLiability);
-        console.log("AmtClaimed:", oPayloadItem.AmtClaimed);
-        console.log("PmApprAmt:", oPayloadItem.PmApprAmt);
-        console.log("PmApprStatus:", oPayloadItem.PmApprStatus);
-        console.log("PmApprRemarks:", oPayloadItem.PmApprRemarks);
-        console.log("PmApprOn:", oPayloadItem.PmApprOn);
-        console.log("PmUserId:", oPayloadItem.PmUserId);
-        console.log("Currency:", oPayloadItem.Currency);
-        console.log("AccountNumber:", oPayloadItem.AccountNumber);
-        console.log("BankName:", oPayloadItem.BankName);
-        console.log("TaxNum:", oPayloadItem.TaxNum);
-        console.log("BankKey:", oPayloadItem.BankKey);
-        console.log("ReferenceDoc:", oPayloadItem.ReferenceDoc);
-        console.log("Gst2aRef:", oPayloadItem.Gst2aRef);
-        console.log("Gst2aNref:", oPayloadItem.Gst2aNref);
-        console.log("AprnoRef:", oPayloadItem.AprnoRef);
-        console.log("Gstr1Details:", oPayloadItem.Gstr1Details);
-        console.log("Remark:", oPayloadItem.Remark);
-        console.log("AccountHolder:", oPayloadItem.AccountHolder);
-        console.log("Branch:", oPayloadItem.Branch);
-        console.log("===============================");
+        
 
         return oPayloadItem;
       },

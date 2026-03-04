@@ -16,8 +16,10 @@ builder:
         target:
           url: https://s4sandbox.smsindia.com:50002/
           client: '300'
-          ignoreCertError: true
-          certificatePath: "C:\Users\user\Downloads\smsCert.crt"
+          scp: false
+        credentials:
+          rejectUnauthorized: false
+        authenticationType: basic
         app:
           name: ZPAYMENTAPPROVA
           description: Payment Approval Workflow
@@ -25,3 +27,4 @@ builder:
           transport: SMXK900729
         exclude:
           - /test/
+        ignoreCertError: true

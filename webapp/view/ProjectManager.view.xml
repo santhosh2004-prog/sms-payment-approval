@@ -139,12 +139,17 @@
                         label="Date of Approval Note"
                         width="140px"
                         filterProperty="CreatedOn"
+                        
                     >
                         <table:template>
                             <m:Text
                                 text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
                                 visible="{treeData>isHeader}"
                             />
+                             <m:Text
+                text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
+                visible="{= !${treeData>isHeader} }"
+            />
                         </table:template>
                     </table:Column>
 
@@ -206,7 +211,7 @@
                     <!-- ================= Liability Head (Item) ================= -->
                     <table:Column
                         id="colLiabilityHead"
-                        label="Liability Head (Dropdown)"
+                        label="Liability Head "
                         width="180px"
                         filterProperty="LiabHead"
                     >

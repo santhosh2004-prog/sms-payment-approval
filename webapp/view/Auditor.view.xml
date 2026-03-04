@@ -145,6 +145,10 @@
                                 text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
                                 visible="{treeData>isHeader}"
                             />
+                            <m:Text
+                                text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
                         </table:template>
                     </table:Column>
 
@@ -485,15 +489,14 @@
                     </table:Column>
 
                     <!-- ================= Amount approved by Project Manager ================= -->
-                 <table:Column
+                    <table:Column
                         id="colPmApprAmt"
                         label="Amount approved by Project Manager"
                         width="200px"
                         hAlign="End"
                         filterProperty="PmApprAmt"
                     >
-                      
-                            <!-- <m:Input
+                        <!-- <m:Input
                                 value="{treeData>PmApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
                                 type="Number"
@@ -501,22 +504,21 @@
                                 textAlign="End"
                                 change="onPmApprAmountChange"
                             /> -->
-                      <table:template>
+                        <table:template>
                             <m:Text
                                 text="{treeData>PmApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
                             />
                         </table:template>
                     </table:Column>
-                     <table:Column
+                    <table:Column
                         id="colCfoApprAmt"
                         label="Amount approved by CFO"
                         width="200px"
                         hAlign="End"
                         filterProperty="CfoApprAmt"
                     >
-                      
-                            <!-- <m:Input
+                        <!-- <m:Input
                                 value="{treeData>PmApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
                                 type="Number"
@@ -524,18 +526,13 @@
                                 textAlign="End"
                                 change="onPmApprAmountChange"
                             /> -->
-                      <table:template>
+                        <table:template>
                             <m:Text
                                 text="{treeData>CfoApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
                             />
                         </table:template>
                     </table:Column>
-
-
-
-
-
 
                     <table:Column
                         id="colAuditorApprAmt"
@@ -570,7 +567,6 @@
                             />
                         </table:template>
                     </table:Column> -->
-
 
                     <table:Column
                         id="colPmRemark"

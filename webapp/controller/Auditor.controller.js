@@ -1,959 +1,1103 @@
-sap.ui.define([
+sap.ui.define(
+  [
     "sap/ui/core/mvc/Controller",
     "sap/ui/model/json/JSONModel",
     "sap/m/MessageToast",
     "sap/ui/core/ValueState",
     "sap/m/MessageBox",
-    "sap/ui/core/BusyIndicator"
-], function (Controller, JSONModel, MessageToast, ValueState, MessageBox, BusyIndicator) {
+    "sap/ui/core/BusyIndicator",
+  ],
+  function (
+    Controller,
+    JSONModel,
+    MessageToast,
+    ValueState,
+    MessageBox,
+    BusyIndicator,
+  ) {
     "use strict";
 
-    return Controller.extend("com.incresol.zpaymentworkflow.controller.Auditor", {
+    return Controller.extend(
+      "com.incresol.zpaymentworkflow.controller.Auditor",
+      {
+        onInit: function () {
+          console.log("ProjectManager controller initialized");
+          var oRouter = this.getOwnerComponent().getRouter();
 
-      
-         onInit: function () {
-            console.log("ProjectManager controller initialized");
-             var oRouter = this.getOwnerComponent().getRouter();
+          oRouter
+            .getRoute("Auditor")
+            .attachPatternMatched(this._validateUserRole, this);
 
-    oRouter.getRoute("Auditor").attachPatternMatched(this._validateUserRole, this);
-            
-            // Load custom CSS
-            this._loadCustomCSS();
+          // Load custom CSS
+          this._loadCustomCSS();
 
-            // Initialize view state model for bulk actions and currency display
-            var oViewStateModel = new JSONModel({
-                showBulkActions: false,
-                selectedCount: 0,
-                showInLakhs: false // Default to rupees view
-            });
-            this.getView().setModel(oViewStateModel, "viewState");
+          // Initialize view state model for bulk actions and currency display
+          var oViewStateModel = new JSONModel({
+            showBulkActions: false,
+            selectedCount: 0,
+            showInLakhs: false, // Default to rupees view
+          });
+          this.getView().setModel(oViewStateModel, "viewState");
 
-            // Initialize tree data model
-            var oTreeDataModel = new JSONModel({
-                treeData: []
-            });
-            this.getView().setModel(oTreeDataModel, "treeData");
-            this.getView().addEventDelegate({
-    onAfterRendering: function () {
-        var oTreeTable = this.byId("idTreeTable");
-        if (!oTreeTable) {
-            return;
-        }
+          // Initialize tree data model
+          var oTreeDataModel = new JSONModel({
+            treeData: [],
+          });
+          this.getView().setModel(oTreeDataModel, "treeData");
+          this.getView().addEventDelegate({
+            onAfterRendering: function () {
+              var oTreeTable = this.byId("idTreeTable");
+              if (!oTreeTable) {
+                return;
+              }
 
-        /* ===============================
+              /* ===============================
            1️⃣ Vendor color logic (existing)
         =============================== */
-        if (!this._bVendorColorAttached) {
-            this._bVendorColorAttached = true;
+              if (!this._bVendorColorAttached) {
+                this._bVendorColorAttached = true;
 
-            oTreeTable.attachRowsUpdated(
-                function () {
+                oTreeTable.attachRowsUpdated(
+                  function () {
                     this._applyVendorColorsToTreeTable();
-                }.bind(this)
-            );
-        }
-         if (!this._bDefaultLayoutCaptured) {
-        this._bDefaultLayoutCaptured = true;
-        this._captureDefaultLayout();
-    }
+                  }.bind(this),
+                );
+              }
+              if (!this._bDefaultLayoutCaptured) {
+                this._bDefaultLayoutCaptured = true;
+                this._captureDefaultLayout();
+              }
 
-        /* ===============================
+              /* ===============================
            2️⃣ DEFAULT layout binding
         =============================== */
-        if (!this._bDefaultLayoutCaptured) {
-            this._bDefaultLayoutCaptured = true;
+              if (!this._bDefaultLayoutCaptured) {
+                this._bDefaultLayoutCaptured = true;
 
-            var aDefaultColumns = oTreeTable.getColumns().map(function (oColumn) {
-                return {
-                    id: oColumn.getId().split("--").pop(),
-                    visible: oColumn.getVisible()
-                };
-            });
+                var aDefaultColumns = oTreeTable
+                  .getColumns()
+                  .map(function (oColumn) {
+                    return {
+                      id: oColumn.getId().split("--").pop(),
+                      visible: oColumn.getVisible(),
+                    };
+                  });
 
-            var oLayoutModel = this.getView().getModel("layoutModel");
-            var aLayouts = oLayoutModel.getProperty("/layouts");
+                var oLayoutModel = this.getView().getModel("layoutModel");
+                var aLayouts = oLayoutModel.getProperty("/layouts");
 
-            var oDefaultLayout = aLayouts.find(function (oLayout) {
-                return oLayout.id === "DEFAULT";
-            });
+                var oDefaultLayout = aLayouts.find(function (oLayout) {
+                  return oLayout.id === "DEFAULT";
+                });
 
-            if (oDefaultLayout) {
-                oDefaultLayout.columns = aDefaultColumns;
-                oLayoutModel.refresh(true);
-            }
-        }
-    }.bind(this)
+                if (oDefaultLayout) {
+                  oDefaultLayout.columns = aDefaultColumns;
+                  oLayoutModel.refresh(true);
+                }
+              }
+            }.bind(this),
+          });
 
+          // Wait for OData model to be available and load data
+          this._waitForModelAndLoadData();
+          var oTreeModel = this.getView().getModel("treeData");
+          oTreeModel.attachRequestCompleted(
+            this._addSelectedFlagToTreeData.bind(this),
+          );
 
-});
-
-
-            // Wait for OData model to be available and load data
-            this._waitForModelAndLoadData();
-            var oTreeModel = this.getView().getModel("treeData");
-  oTreeModel.attachRequestCompleted(this._addSelectedFlagToTreeData.bind(this));
-
-              const oColumnModel = new sap.ui.model.json.JSONModel({
-                columns: [
-                    // { id: "idColApprovalNoteNo", label: "Approval Note No", visible: true },
-                    // { id: "colDate", label: "Date of ApprovDate of Approval Noteal Note", visible: true },
-                    // { id: "colProfitCenter", label: "Profit Center", visible: true },
-                    // { id: "colProfitCente", label: "Profit Center Name", visible: true },
-                    { id: "colVendorCode", label: "Vendor Code", visible: true },
-                    { id: "colVendorName", label: "Name of Vendor", visible: true },
-                    { id: "colLiabilityHead", label: "Liability Head", visible: true },
-                    { id: "colInvoiceNo", label: "Invoice No.", visible: true },
-                    { id: "colPurchaseOrder", label: "Purchase Order", visible: true },
-                    { id: "colDocumentNumber", label: "Document Number", visible: true },
-                    { id: "colDocumentDate", label: "Document Date", visible: true },
-                    { id: "colPostingDate", label: "Posting Date", visible: true },
-                    { id: "colGrossAmt", label: "Gross Amount", visible: true },
-                    { id: "colGST", label: "GST Amount", visible: true },
-                    { id: "colTDS", label: "TDS Amount", visible: true },
-                    { id: "colTotalLiability", label: "Total Liability", visible: true },
-                    { id: "colAmtClaimed", label: "Amount Claimed", visible: true },
-                    { id: "colGst2aRef", label: "GST Amount reflected in GSTR 2A", visible: true },
-                    { id: "colGst2aNref", label: "GST Amount not reflected in GSTR 2A", visible: true },
-                    { id: "colAmtAlreadyClaimed", label: "Amount already claimed in approval notes", visible: true },
-                    { id: "colAprnoRef", label: "Approval notes Pr. Ref", visible: true },
-                    { id: "colAmtProposed", label: "Amount proposed to be paid", visible: true },
-                    { id: "colPmApprAmt", label: "Amount approved by Project Manager", visible: true },
-                    { id: "colCfoApprAmt", label: "Amount approved by CFO", visible: true },
-                    { id: "colAudApprAmt", label: "Amount approved by Auditor", visible: true },
-                    { id: "colPmStatus", label: "PM Status", visible: true },
-                     { id: "colPmApprAmt", label: "Amount approved by Project Manager", visible: true },
-                      { id: "colCfoApprAmt", label: "Amount approved by CFO", visible: true },
-                    { id: "colAudApprAmt", label: "Amount approved by Auditor", visible: true },
-                    { id: "colPmStatus", label: "PM Status", visible: true },
-                    { id: "colPmRemark", label: "PM Remark", visible: true },
-                    { id: "colCfoRemark", label: "CFO Remark", visible: true },
-                    { id: "colAuditorRemark", label: "Auditor Remark", visible: true },
-                    { id: "colBankName", label: "Bank Name", visible: true },
-                    { id: "colAccountNumber", label: "Account Number", visible: true },
-                    { id: "colCurrency", label: "Currency", visible: true },
-                    { id: "colCompanyCode", label: "Company Code", visible: true },
-                    { id: "colCreatedBy", label: "Created By", visible: true },
-                    { id: "colCreationTime", label: "Creation Time", visible: true },
-                    { id: "colItemCount", label: "Item Count", visible: true },
-                    { id: "colTaxNumber", label: "Tax Number", visible: true },
-                    { id: "colBankKey", label: "Bank Key", visible: true },
-                    { id: "colReferenceDocument", label: "Reference Document", visible: true },
-                    { id: "colGstr1Details", label: "GSTR1 Details", visible: true },
-                    { id: "colGeneralRemark", label: "General Remark", visible: true },
-                    { id: "colAccountHolder", label: "Account Holder Name", visible: true },
-                    { id: "colBranch", label: "Branch", visible: true },
-                ]
-            });
-            this.getView().setModel(oColumnModel, "columnModel");
-         const oLayoutModel = new sap.ui.model.json.JSONModel({
-    layouts: [
-        {
-            id: "DEFAULT",
-            name: "Default Layout",
-            isDefault: true,
-            columns: [] // will be filled AFTER rendering
-        },
-        {
-            id: "MINIMAL",
-            name: "Minimal",
-            isDefault: false,
+          const oColumnModel = new sap.ui.model.json.JSONModel({
             columns: [
-                { id: "colVendorCode", visible: true },
-                { id: "colVendorName", visible: true },
-                { id: "colGrossAmt", visible: true },
-                { id: "colPmStatus", visible: true }
-            ]
-        }
-    ],
-    selectedLayoutId: "DEFAULT"
-});
+              // { id: "idColApprovalNoteNo", label: "Approval Note No", visible: true },
+              // { id: "colDate", label: "Date of ApprovDate of Approval Noteal Note", visible: true },
+              // { id: "colProfitCenter", label: "Profit Center", visible: true },
+              // { id: "colProfitCente", label: "Profit Center Name", visible: true },
+              { id: "colVendorCode", label: "Vendor Code", visible: true },
+              { id: "colVendorName", label: "Name of Vendor", visible: true },
+              {
+                id: "colLiabilityHead",
+                label: "Liability Head",
+                visible: true,
+              },
+              { id: "colInvoiceNo", label: "Invoice No.", visible: true },
+              {
+                id: "colPurchaseOrder",
+                label: "Purchase Order",
+                visible: true,
+              },
+              {
+                id: "colDocumentNumber",
+                label: "Document Number",
+                visible: true,
+              },
+              { id: "colDocumentDate", label: "Document Date", visible: true },
+              { id: "colPostingDate", label: "Posting Date", visible: true },
+              { id: "colGrossAmt", label: "Gross Amount", visible: true },
+              { id: "colGST", label: "GST Amount", visible: true },
+              { id: "colTDS", label: "TDS Amount", visible: true },
+              {
+                id: "colTotalLiability",
+                label: "Total Liability",
+                visible: true,
+              },
+              { id: "colAmtClaimed", label: "Amount Claimed", visible: true },
+              {
+                id: "colGst2aRef",
+                label: "GST Amount reflected in GSTR 2A",
+                visible: true,
+              },
+              {
+                id: "colGst2aNref",
+                label: "GST Amount not reflected in GSTR 2A",
+                visible: true,
+              },
+              {
+                id: "colAmtAlreadyClaimed",
+                label: "Amount already claimed in approval notes",
+                visible: true,
+              },
+              {
+                id: "colAprnoRef",
+                label: "Approval notes Pr. Ref",
+                visible: true,
+              },
+              {
+                id: "colAmtProposed",
+                label: "Amount proposed to be paid",
+                visible: true,
+              },
+              {
+                id: "colPmApprAmt",
+                label: "Amount approved by Project Manager",
+                visible: true,
+              },
+              {
+                id: "colCfoApprAmt",
+                label: "Amount approved by CFO",
+                visible: true,
+              },
+              {
+                id: "colAudApprAmt",
+                label: "Amount approved by Auditor",
+                visible: true,
+              },
+              { id: "colPmStatus", label: "PM Status", visible: true },
+              {
+                id: "colPmApprAmt",
+                label: "Amount approved by Project Manager",
+                visible: true,
+              },
+              {
+                id: "colCfoApprAmt",
+                label: "Amount approved by CFO",
+                visible: true,
+              },
+              {
+                id: "colAudApprAmt",
+                label: "Amount approved by Auditor",
+                visible: true,
+              },
+              { id: "colPmStatus", label: "PM Status", visible: true },
+              { id: "colPmRemark", label: "PM Remark", visible: true },
+              { id: "colCfoRemark", label: "CFO Remark", visible: true },
+              {
+                id: "colAuditorRemark",
+                label: "Auditor Remark",
+                visible: true,
+              },
+              { id: "colBankName", label: "Bank Name", visible: true },
+              {
+                id: "colAccountNumber",
+                label: "Account Number",
+                visible: true,
+              },
+              { id: "colCurrency", label: "Currency", visible: true },
+              { id: "colCompanyCode", label: "Company Code", visible: true },
+              { id: "colCreatedBy", label: "Created By", visible: true },
+              { id: "colCreationTime", label: "Creation Time", visible: true },
+              { id: "colItemCount", label: "Item Count", visible: true },
+              { id: "colTaxNumber", label: "Tax Number", visible: true },
+              { id: "colBankKey", label: "Bank Key", visible: true },
+              {
+                id: "colReferenceDocument",
+                label: "Reference Document",
+                visible: true,
+              },
+              { id: "colGstr1Details", label: "GSTR1 Details", visible: true },
+              {
+                id: "colGeneralRemark",
+                label: "General Remark",
+                visible: true,
+              },
+              {
+                id: "colAccountHolder",
+                label: "Account Holder Name",
+                visible: true,
+              },
+              { id: "colBranch", label: "Branch", visible: true },
+            ],
+          });
+          this.getView().setModel(oColumnModel, "columnModel");
+          const oLayoutModel = new sap.ui.model.json.JSONModel({
+            layouts: [
+              {
+                id: "DEFAULT",
+                name: "Default Layout",
+                isDefault: true,
+                columns: [], // will be filled AFTER rendering
+              },
+              {
+                id: "MINIMAL",
+                name: "Minimal",
+                isDefault: false,
+                columns: [
+                  { id: "colVendorCode", visible: true },
+                  { id: "colVendorName", visible: true },
+                  { id: "colGrossAmt", visible: true },
+                  { id: "colPmStatus", visible: true },
+                ],
+              },
+            ],
+            selectedLayoutId: "DEFAULT",
+          });
 
-this.getView().setModel(oLayoutModel, "layoutModel");
-            
+          this.getView().setModel(oLayoutModel, "layoutModel");
         },
         _createDefaultLayoutFromView: function () {
-    var oTreeTable = this.byId("idTreeTable");
-    if (!oTreeTable) {
-        return [];
-    }
+          var oTreeTable = this.byId("idTreeTable");
+          if (!oTreeTable) {
+            return [];
+          }
 
-    return oTreeTable.getColumns().map(function (oColumn) {
-        return {
-            id: oColumn.getId().split("--").pop(), // safe ID
-            visible: oColumn.getVisible()
-        };
-    });
-}
-,
-
-        _loadCustomCSS: function() {
-            // Ensure CSS is loaded
-            try {
-                var sStylePath = sap.ui.require.toUrl("com/incresol/zpaymentworkflow/css/style.css");
-                var oLink = document.createElement("link");
-                oLink.rel = "stylesheet";
-                oLink.type = "text/css";
-                oLink.href = sStylePath;
-                document.head.appendChild(oLink);
-                console.log("Custom CSS loaded from:", sStylePath);
-            } catch (e) {
-                console.warn("Could not load custom CSS:", e);
-                // Fallback: try relative path
-                var oLink2 = document.createElement("link");
-                oLink2.rel = "stylesheet";
-                oLink2.type = "text/css";
-                oLink2.href = "./css/style.css";
-                document.head.appendChild(oLink2);
-            }
+          return oTreeTable.getColumns().map(function (oColumn) {
+            return {
+              id: oColumn.getId().split("--").pop(), // safe ID
+              visible: oColumn.getVisible(),
+            };
+          });
+        },
+        _loadCustomCSS: function () {
+          // Ensure CSS is loaded
+          try {
+            var sStylePath = sap.ui.require.toUrl(
+              "com/incresol/zpaymentworkflow/css/style.css",
+            );
+            var oLink = document.createElement("link");
+            oLink.rel = "stylesheet";
+            oLink.type = "text/css";
+            oLink.href = sStylePath;
+            document.head.appendChild(oLink);
+            console.log("Custom CSS loaded from:", sStylePath);
+          } catch (e) {
+            console.warn("Could not load custom CSS:", e);
+            // Fallback: try relative path
+            var oLink2 = document.createElement("link");
+            oLink2.rel = "stylesheet";
+            oLink2.type = "text/css";
+            oLink2.href = "./css/style.css";
+            document.head.appendChild(oLink2);
+          }
         },
         _validateUserRole: function () {
+          var oODataModel = this.getOwnerComponent().getModel("oModel");
+          var oRouter = this.getOwnerComponent().getRouter();
+          var that = this;
 
-            var oODataModel = this.getOwnerComponent().getModel("oModel");
-            var oRouter = this.getOwnerComponent().getRouter();
-            var that = this;
+          oODataModel.read("/UserApprovalLevelSet", {
+            success: function (oData) {
+              if (!oData.results || oData.results.length === 0) {
+                MessageBox.error("User verification data not found");
+                oRouter.navTo("Home", {}, true);
+                return;
+              }
 
-            oODataModel.read("/UserApprovalLevelSet", {
+              var oUser = oData.results[0];
 
-                success: function (oData) {
+              // 🔹 Create Local Model
+              var oLocalModel = new JSONModel({
+                UserName: oUser.UserName,
+                ApprovalLevel: oUser.ApprovalLevel,
+              });
 
-                    if (!oData.results || oData.results.length === 0) {
-                        MessageBox.error("User verification data not found");
-                        oRouter.navTo("Home", {}, true);
-                        return;
-                    }
+              that.getView().setModel(oLocalModel, "localUser");
 
-                    var oUser = oData.results[0];
+              // 🔹 Validate Auditor Role
+              if (oUser.ApprovalLevel !== "AUD") {
+                MessageBox.error("Unauthorized Access");
+                oRouter.navTo("NotFound", {}, true);
+                oRouter.initialize();
+              }
+            },
 
-                    // 🔹 Create Local Model
-                    var oLocalModel = new JSONModel({
-                        UserName: oUser.UserName,
-                        ApprovalLevel: oUser.ApprovalLevel
-                    });
-
-                    that.getView().setModel(oLocalModel, "localUser");
-
-                    // 🔹 Validate Auditor Role
-                    if (oUser.ApprovalLevel !== "AUD") {
-                        MessageBox.error("Unauthorized Access");
-                       oRouter.navTo("NotFound", {}, true);
-                       oRouter.initialize();
-
-                    }
-                },
-
-                error: function () {
-                    MessageBox.error("Failed to verify user");
-                  oRouter.navTo("NotFound", {}, true);
-                  oRouter.initialize();
-
-                }
-
-            });
-        }
-        ,
+            error: function () {
+              MessageBox.error("Failed to verify user");
+              oRouter.navTo("NotFound", {}, true);
+              oRouter.initialize();
+            },
+          });
+        },
         _applyVendorColorsToTreeTable: function () {
-  var oTreeTable = this.byId("idTreeTable");
-  if (!oTreeTable) {
-    return;
-  }
+          var oTreeTable = this.byId("idTreeTable");
+          if (!oTreeTable) {
+            return;
+          }
 
-  var aColorClasses = [
-    "vendorColor1",
-    "vendorColor2",
-    "vendorColor3",
-    "vendorColor4",
-    "vendorColor5",
-  ];
+          var aColorClasses = [
+            "vendorColor1",
+            "vendorColor2",
+            "vendorColor3",
+            "vendorColor4",
+            "vendorColor5",
+          ];
 
-  // safety init (in case)
-  this._vendorColorMap = this._vendorColorMap || {};
-  this._vendorColorIndex = this._vendorColorIndex || 0;
+          // safety init (in case)
+          this._vendorColorMap = this._vendorColorMap || {};
+          this._vendorColorIndex = this._vendorColorIndex || 0;
 
-  var aRows = oTreeTable.getRows();
+          var aRows = oTreeTable.getRows();
 
-  aRows.forEach(
-    function (oRow) {
-      // remove old color classes
-      aColorClasses.forEach(function (sClass) {
-        oRow.removeStyleClass(sClass);
-      });
+          aRows.forEach(
+            function (oRow) {
+              // remove old color classes
+              aColorClasses.forEach(function (sClass) {
+                oRow.removeStyleClass(sClass);
+              });
 
-      var oCtx = oRow.getBindingContext("treeData");
-      if (!oCtx) {
-        return;
-      }
+              var oCtx = oRow.getBindingContext("treeData");
+              if (!oCtx) {
+                return;
+              }
 
-      var oObj = oCtx.getObject();
-      if (!oObj) {
-        return;
-      }
+              var oObj = oCtx.getObject();
+              if (!oObj) {
+                return;
+              }
 
-      // 🔹 Vendor key (header + item safe)
-      var sVendor =
-        oObj.VendorCode ||
-        oObj.VendorNumber ||
-        (oObj.isHeader && oObj.VendorCode);
+              // 🔹 Vendor key (header + item safe)
+              var sVendor =
+                oObj.VendorCode ||
+                oObj.VendorNumber ||
+                (oObj.isHeader && oObj.VendorCode);
 
-      if (!sVendor) {
-        return;
-      }
+              if (!sVendor) {
+                return;
+              }
 
-      // 🔹 Assign color if not yet mapped
-      if (!this._vendorColorMap[sVendor]) {
-        this._vendorColorMap[sVendor] =
-          aColorClasses[this._vendorColorIndex % aColorClasses.length];
-        this._vendorColorIndex++;
-      }
+              // 🔹 Assign color if not yet mapped
+              if (!this._vendorColorMap[sVendor]) {
+                this._vendorColorMap[sVendor] =
+                  aColorClasses[this._vendorColorIndex % aColorClasses.length];
+                this._vendorColorIndex++;
+              }
 
-      // 🔹 Apply color
-      oRow.addStyleClass(this._vendorColorMap[sVendor]);
-    }.bind(this),
-  );
-},
-
+              // 🔹 Apply color
+              oRow.addStyleClass(this._vendorColorMap[sVendor]);
+            }.bind(this),
+          );
+        },
 
         _waitForModelAndLoadData: function () {
-            var oModel = this.getView().getModel("oModel");
+          var oModel = this.getView().getModel("oModel");
 
-            if (oModel && oModel.getServiceMetadata()) {
-                // Model is ready, load data immediately
-                console.log("OData model ready, loading data");
+          if (oModel && oModel.getServiceMetadata()) {
+            // Model is ready, load data immediately
+            console.log("OData model ready, loading data");
+            this._loadPaymentData();
+          } else if (oModel) {
+            // Model exists but metadata not loaded yet
+            console.log("Waiting for OData metadata to load");
+            oModel.attachMetadataLoaded(
+              function () {
+                console.log("OData metadata loaded, now loading data");
                 this._loadPaymentData();
-            } else if (oModel) {
-                // Model exists but metadata not loaded yet
-                console.log("Waiting for OData metadata to load");
-                oModel.attachMetadataLoaded(function () {
-                    console.log("OData metadata loaded, now loading data");
-                    this._loadPaymentData();
-                }.bind(this));
+              }.bind(this),
+            );
 
-                oModel.attachMetadataFailed(function (oEvent) {
-                    console.error("OData metadata loading failed:", oEvent.getParameters());
-                    MessageToast.show("Failed to load OData metadata");
-                });
-            } else {
-                // Model not available yet, retry after delay
-                console.log("OData model not available, retrying in 1 second");
-                setTimeout(function () {
-                    this._waitForModelAndLoadData();
-                }.bind(this), 1000);
-            }
+            oModel.attachMetadataFailed(function (oEvent) {
+              console.error(
+                "OData metadata loading failed:",
+                oEvent.getParameters(),
+              );
+              MessageToast.show("Failed to load OData metadata");
+            });
+          } else {
+            // Model not available yet, retry after delay
+            console.log("OData model not available, retrying in 1 second");
+            setTimeout(
+              function () {
+                this._waitForModelAndLoadData();
+              }.bind(this),
+              1000, 
+            );
+          }
         },
 
-_loadPaymentData: function () {
-    var oModel = this.getView().getModel("oModel");
+        _loadPaymentData: function () {
+          var oModel = this.getView().getModel("oModel");
 
-    if (!oModel) {
-        MessageToast.show("OData model 'oModel' not available");
-        return;
-    }
+          if (!oModel) {
+            MessageToast.show("OData model 'oModel' not available");
+            return;
+          }
 
-    oModel.read("/PaymentHeaderSet", {
-        urlParameters: {
-            "$expand": "ToItems"
-        },
+          oModel.read("/PaymentHeaderSet", {
+            urlParameters: {
+              $expand: "ToItems",
+            },
 
-        success: function (oData) {
-            console.log("PaymentHeaderSet raw response:", oData);
+            success: function (oData) {
+              console.log("PaymentHeaderSet raw response:", oData);
 
-            var aHeaders = (oData && oData.results) ? oData.results : [];
-            console.log("Total Headers count:", aHeaders.length);
+              var aHeaders = oData && oData.results ? oData.results : [];
+              console.log("Total Headers count:", aHeaders.length);
 
-            /* ===================================================== */
-            /* 🔹 FILTER ITEMS WHERE CFO STATUS = APPROVED          */
-            /* ===================================================== */
+              /* ===================================================== */
+              /* 🔹 FILTER ITEMS WHERE CFO STATUS = APPROVED          */
+              /* ===================================================== */
 
-            var aFilteredHeaders = aHeaders.map(function (oHeader) {
+              var aFilteredHeaders = aHeaders
+                .map(function (oHeader) {
+                  var aItems =
+                    oHeader.ToItems && oHeader.ToItems.results
+                      ? oHeader.ToItems.results
+                      : [];
 
-                var aItems = (oHeader.ToItems && oHeader.ToItems.results)
-                    ? oHeader.ToItems.results
-                    : [];
+                  // 🔹 Keep only items where CFO Approval Status = APPROVED
+                  var aApprovedItems = aItems.filter(function (oItem) {
+                    // 🔹 Store all approval statuses in order
+                    var aStatuses = [
+                      oItem.Pmapprstatus,
+                      oItem.HodApprStatus,
+                      oItem.CfoApprStatus,
+                      oItem.AudApprStatus,
+                      oItem.DirApprStatus,
+                    ];
 
-                // 🔹 Keep only items where CFO Approval Status = APPROVED
-                var aApprovedItems = aItems.filter(function (oItem) {
-                    return oItem.CfoApprStatus === "APPROVED";
-                });
+                    var sLastApprovedStatus = null;
 
-                // 🔹 If no approved items → skip header
-                if (aApprovedItems.length === 0) {
-                    return null;
-                }
-
-                // 🔹 Return cloned header with only approved items
-                return Object.assign({}, oHeader, {
-                    ToItems: {
-                        results: aApprovedItems
+                    // 🔹 Loop to find last approved stage
+                    for (var i = 0; i < aStatuses.length; i++) {
+                      if (aStatuses[i] === "APPROVED") {
+                        sLastApprovedStatus = i // store index of last approved
+                      }
                     }
-                });
 
-            }).filter(Boolean); // remove null headers
+                    // 🔹 If last approved stage is CFO → Skip
+                    // CFO index = 2 (PMA=0, HOD=1, CFO=2)
+                    if (sLastApprovedStatus >= 3) {
+                      return false; // Skip this item
+                    }
+                    var iTotalLiability = parseFloat(oItem.TotalLiability) || 0;
+                    if (iTotalLiability > 1000000){
+                      return false; // Skip if total liability is zero
+                    }
+                   
+                    
 
-            console.log("Headers with CFO Approved items:", aFilteredHeaders.length);
+                    return true; // Keep other items
+                  });
 
-            /* ===================================================== */
-            /* 🔹 IF NO APPROVED RECORDS                             */
-            /* ===================================================== */
+                  // 🔹 If no approved items → skip header
+                  if (aApprovedItems.length === 0) {
+                    return null;
+                  }
 
-            if (aFilteredHeaders.length === 0) {
+                  // 🔹 Return cloned header with only approved items
+                  return Object.assign({}, oHeader, {
+                    ToItems: {
+                      results: aApprovedItems,
+                    },
+                  });
+                })
+                .filter(Boolean); // remove null headers
+
+              console.log(
+                "Headers with CFO Approved items:",
+                aFilteredHeaders.length,
+              );
+
+              /* ===================================================== */
+              /* 🔹 IF NO APPROVED RECORDS                             */
+              /* ===================================================== */
+
+              if (aFilteredHeaders.length === 0) {
                 MessageToast.show("No CFO Approved records found");
                 this.getView().getModel("treeData").setData({ treeData: [] });
                 return;
-            }
+              }
 
-            /* ===================================================== */
-            /* 🔹 BIND FILTERED DATA                                 */
-            /* ===================================================== */
+              /* ===================================================== */
+              /* 🔹 BIND FILTERED DATA                                 */
+              /* ===================================================== */
 
-            this._transformExpandedHeaderToTree(aFilteredHeaders);
+              this._transformExpandedHeaderToTree(aFilteredHeaders);
+            }.bind(this),
 
-        }.bind(this),
-
-        error: function (oError) {
-            console.error("Error loading PaymentHeaderSet with expand:", oError);
-            this.getView().getModel("treeData").setData({ treeData: [] });
-            MessageToast.show("Error loading payment data");
-        }.bind(this)
-    });
-},
+            error: function (oError) {
+              console.error(
+                "Error loading PaymentHeaderSet with expand:",
+                oError,
+              );
+              this.getView().getModel("treeData").setData({ treeData: [] });
+              MessageToast.show("Error loading payment data");
+            }.bind(this),
+          });
+        },
 
         _transformExpandedHeaderToTree: function (aHeaders) {
-            var aTreeData = aHeaders.map(function (oHeader) {
-                var aItems = (oHeader.ToItems && oHeader.ToItems.results) ? oHeader.ToItems.results : [];
+          var aTreeData = aHeaders.map(function (oHeader) {
+            var aItems =
+              oHeader.ToItems && oHeader.ToItems.results
+                ? oHeader.ToItems.results
+                : [];
 
-                return {
-                    // ===== Header (backend fields) =====
-                    ApprovalNo: oHeader.ApprovalNo,
-                    CreatedOn: oHeader.CreatedOn,
-                    ProfitCenter: oHeader.ProfitCenter,
-                    ProfitCenterName: oHeader.ProfitCenterName,
-                    VendorCode: oHeader.VendorCode,
-                    VendorName: oHeader.VendorName,
-                    CompanyCode: oHeader.CompanyCode,
-                    CreatedBy: oHeader.CreatedBy,
-                    CreatedAt: oHeader.CreationTime,
-                    OverallStatus: oHeader.OverallStatus,
+            return {
+              // ===== Header (backend fields) =====
+              ApprovalNo: oHeader.ApprovalNo,
+              CreatedOn: oHeader.CreatedOn,
+              ProfitCenter: oHeader.ProfitCenter,
+              ProfitCenterName: oHeader.ProfitCenterName,
+              VendorCode: oHeader.VendorCode,
+              VendorName: oHeader.VendorName,
+              CompanyCode: oHeader.CompanyCode,
+              CreatedBy: oHeader.CreatedBy,
+              CreatedAt: oHeader.CreationTime,
+              OverallStatus: oHeader.OverallStatus,
 
-                    // ===== Amounts from backend header =====
-                    TotalBaseAmt: oHeader.BaseAmount,
-                    TotalGstAmt: oHeader.GSTAmount,
-                    TotalTdsAmount: oHeader.TDSAmount,
-                    TotalLiability: oHeader.TotalLiability,
-                    TotalAmtClaimed: oHeader.AmountClaimed,
+              // ===== Amounts from backend header =====
+              TotalBaseAmt: oHeader.BaseAmount,
+              TotalGstAmt: oHeader.GSTAmount,
+              TotalTdsAmount: oHeader.TDSAmount,
+              TotalLiability: oHeader.TotalLiability,
+              TotalAmtClaimed: oHeader.AmountClaimed,
 
-                    ItemCount: aItems.length,
+              ItemCount: aItems.length,
 
-                    isHeader: true,
-                    displayText: "Approval: " + oHeader.ApprovalNo + " - " + (oHeader.VendorName || ""),
-                    Currency: aItems.length > 0 ? aItems[0].Currency : "",
+              isHeader: true,
+              displayText:
+                "Approval: " +
+                oHeader.ApprovalNo +
+                " - " +
+                (oHeader.VendorName || ""),
+              Currency: aItems.length > 0 ? aItems[0].Currency : "",
 
-                    // ===== Children =====
-                    children: aItems.map(function (oItem) {
-                        return Object.assign({}, oItem, {
-                            isHeader: false,
-                            displayText: "Item " + oItem.ItemNum + " - " + (oItem.VendorName || "")
-                        });
-                    })
-                };
-            });
+              // ===== Children =====
+              children: aItems.map(function (oItem) {
+                return Object.assign({}, oItem, {
+                  isHeader: false,
+                  displayText:
+                    "Item " + oItem.ItemNum + " - " + (oItem.VendorName || ""),
+                });
+              }),
+            };
+          });
 
-            this.getView().getModel("treeData").setData({ treeData: aTreeData });
+          this.getView().getModel("treeData").setData({ treeData: aTreeData });
 
-            setTimeout(function () {
-                var oTreeTable = this.byId("idTreeTable");
-                if (oTreeTable && aTreeData.length > 0) {
-                    for (var i = 0; i < aTreeData.length; i++) {
-                        oTreeTable.expand(i);
-                    }
+          setTimeout(
+            function () {
+              var oTreeTable = this.byId("idTreeTable");
+              if (oTreeTable && aTreeData.length > 0) {
+                for (var i = 0; i < aTreeData.length; i++) {
+                  oTreeTable.expand(i);
                 }
-            }.bind(this), 100);
+              }
+            }.bind(this),
+            100,
+          );
         },
 
         onSwitchShowInLakhsChange: function (oEvent) {
-            var oSwitch = oEvent.getSource();
-            var bState = oSwitch.getState();
+          var oSwitch = oEvent.getSource();
+          var bState = oSwitch.getState();
 
-            // Update the view state model
-            var oViewStateModel = this.getView().getModel("viewState");
-            oViewStateModel.setProperty("/showInLakhs", bState);
+          // Update the view state model
+          var oViewStateModel = this.getView().getModel("viewState");
+          oViewStateModel.setProperty("/showInLakhs", bState);
 
-            // Show appropriate message
-            var sMessage = bState ? "Amounts now displayed in Lakhs" : "Amounts now displayed in Rupees";
-            MessageToast.show(sMessage);
+          // Show appropriate message
+          var sMessage = bState
+            ? "Amounts now displayed in Lakhs"
+            : "Amounts now displayed in Rupees";
+          MessageToast.show(sMessage);
         },
 
+        _addSelectedFlagToTreeData: function () {
+          var oModel = this.getView().getModel("treeData");
+          var oData = oModel.getData();
 
-_addSelectedFlagToTreeData: function () {
-  var oModel = this.getView().getModel("treeData");
-  var oData = oModel.getData();
+          function addFlag(aNodes) {
+            aNodes.forEach(function (oNode) {
+              oNode.selected = false;
+              if (oNode.children && oNode.children.length) {
+                addFlag(oNode.children);
+              }
+            });
+          }
 
-  function addFlag(aNodes) {
-    aNodes.forEach(function (oNode) {
-      oNode.selected = false;
-      if (oNode.children && oNode.children.length) {
-        addFlag(oNode.children);
-      }
-    });
-  }
-
-  addFlag(oData.treeData);
-  oModel.setData(oData);
-}
-,
-onSelectCheckBoxTreeTable: function (oEvent) {
-  var oModel = this.getView().getModel("treeData");
-  var sPath = oEvent.getSource().getBindingContext("treeData").getPath();
-  var oNode = oModel.getObject(sPath);
-
-  var oContext = {
-    path: sPath,
-    object: oNode
-  };
-
-  if (oNode.children && oNode.children.length) {
-    // parent node
-    this._selectTopDown(oContext);
-
-    if (!oNode.selected) {
-      this._unselectBottomUp(oContext, sPath);
-    }
-  } else {
-    // leaf node
-    this._unselectBottomUp(oContext, sPath);
-  }
-
-  this._updateBulkSelectionState();
-}
-,
-_selectTopDown: function (oCtx) {
-  var bSelected = oCtx.object.selected;
-  var aChildren = oCtx.object.children;
-
-  aChildren.forEach(function (oChild) {
-    oChild.selected = bSelected;
-
-    if (oChild.children && oChild.children.length) {
-      this._selectTopDown({ object: oChild });
-    }
-  }.bind(this));
-}
-,
-_unselectBottomUp: function (oCtx, sPath) {
-  var oModel = this.getView().getModel("treeData");
-
-  var aPath = sPath.split("/");
-  aPath.pop(); // index
-  aPath.pop(); // children
-  var sParentPath = aPath.join("/");
-
-  var oParent = oModel.getObject(sParentPath);
-  if (!oParent) return;
-
-  if (oParent.selected && !oCtx.object.selected) {
-    oParent.selected = false;
-    this._unselectBottomUp({ object: oParent }, sParentPath);
-  }
-}
-,
-_updateBulkSelectionState: function () {
-  var oModel = this.getView().getModel("treeData");
-  var oViewState = this.getView().getModel("viewState");
-  var iCount = 0;
-
-  function countSelected(aNodes) {
-    aNodes.forEach(function (oNode) {
-      if (!oNode.children && oNode.selected) {
-        iCount++;
-      }
-      if (oNode.children) {
-        countSelected(oNode.children);
-      }
-    });
-  }
-
-  countSelected(oModel.getData().treeData);
-
-  oViewState.setProperty("/selectedCount", iCount);
-  oViewState.setProperty("/showBulkActions", iCount > 0);
-}
-
-
-,
-
-        _updateButtonAnimations: function(bHasSelection) {
-            // Add pulse animation to buttons when items are selected
-            setTimeout(function() {
-                var aApproveButtons = document.querySelectorAll('.approveButton');
-                var aRejectButtons = document.querySelectorAll('.rejectButton');
-                
-                aApproveButtons.forEach(function(oButton) {
-                    if (bHasSelection) {
-                        oButton.classList.add('pulse');
-                        // Remove pulse after 3 seconds
-                        setTimeout(function() {
-                            oButton.classList.remove('pulse');
-                        }, 3000);
-                    } else {
-                        oButton.classList.remove('pulse');
-                    }
-                });
-                
-                aRejectButtons.forEach(function(oButton) {
-                    if (bHasSelection) {
-                        oButton.classList.add('pulse');
-                        // Remove pulse after 3 seconds
-                        setTimeout(function() {
-                            oButton.classList.remove('pulse');
-                        }, 3000);
-                    } else {
-                        oButton.classList.remove('pulse');
-                    }
-                });
-            }, 100);
+          addFlag(oData.treeData);
+          oModel.setData(oData);
         },
-_getSelectedLeafItems: function () {
-  var oData = this.getView().getModel("treeData").getData();
-  var aItems = [];
+        onSelectCheckBoxTreeTable: function (oEvent) {
+          var oModel = this.getView().getModel("treeData");
+          var sPath = oEvent
+            .getSource()
+            .getBindingContext("treeData")
+            .getPath();
+          var oNode = oModel.getObject(sPath);
 
-  function traverse(aNodes) {
-    aNodes.forEach(function (oNode) {
-      if (!oNode.children && oNode.selected) {
-        aItems.push(oNode);
-      }
-      if (oNode.children && oNode.children.length) {
-        traverse(oNode.children);
-      }
-    });
-  }
+          var oContext = {
+            path: sPath,
+            object: oNode,
+          };
 
-  traverse(oData.treeData);
-  return aItems;
-},
-onApproveButtonPress: function () {
-  var aSelectedItems = this._getSelectedLeafItems();
+          if (oNode.children && oNode.children.length) {
+            // parent node
+            this._selectTopDown(oContext);
 
-  if (!aSelectedItems.length) {
-    sap.m.MessageToast.show("Please select items to approve");
-    return;
-  }
+            if (!oNode.selected) {
+              this._unselectBottomUp(oContext, sPath);
+            }
+          } else {
+            // leaf node
+            this._unselectBottomUp(oContext, sPath);
+          }
 
-  this._openApprovalDialog(aSelectedItems, "APPROVE");
-}
-,
-onRejectButtonPress: function () {
-  var aSelectedItems = this._getSelectedLeafItems();
+          this._updateBulkSelectionState();
+        },
+        _selectTopDown: function (oCtx) {
+          var bSelected = oCtx.object.selected;
+          var aChildren = oCtx.object.children;
 
-  if (!aSelectedItems.length) {
-    sap.m.MessageToast.show("Please select items to reject");
-    return;
-  }
+          aChildren.forEach(
+            function (oChild) {
+              oChild.selected = bSelected;
 
-  this._openApprovalDialog(aSelectedItems, "REJECT");
-}
+              if (oChild.children && oChild.children.length) {
+                this._selectTopDown({ object: oChild });
+              }
+            }.bind(this),
+          );
+        },
+        _unselectBottomUp: function (oCtx, sPath) {
+          var oModel = this.getView().getModel("treeData");
 
+          var aPath = sPath.split("/");
+          aPath.pop(); // index
+          aPath.pop(); // children
+          var sParentPath = aPath.join("/");
 
-,
-        _openApprovalDialog: async function (aSelectedItems, sActionType) {
-            console.log("=== _openApprovalDialog CALLED ===");
-            console.log("Selected Items Count:", aSelectedItems.length);
-            console.log("Action Type:", sActionType);
-            console.log("Selected Items:", aSelectedItems);
+          var oParent = oModel.getObject(sParentPath);
+          if (!oParent) return;
 
-            var sDialogTitle = sActionType === "APPROVE" ? "Approve Items" : "Reject Items";
+          if (oParent.selected && !oCtx.object.selected) {
+            oParent.selected = false;
+            this._unselectBottomUp({ object: oParent }, sParentPath);
+          }
+        },
+        _updateBulkSelectionState: function () {
+          var oModel = this.getView().getModel("treeData");
+          var oViewState = this.getView().getModel("viewState");
+          var iCount = 0;
 
-            // 1) Prepare dialog model data
-            var oDialogModel = new sap.ui.model.json.JSONModel({
-                title: sDialogTitle,
-                actionType: sActionType === "APPROVE" ? "Approve" : "Reject",
-                itemCount: aSelectedItems.length,
-                selectedItems: aSelectedItems
+          function countSelected(aNodes) {
+            aNodes.forEach(function (oNode) {
+              if (!oNode.children && oNode.selected) {
+                iCount++;
+              }
+              if (oNode.children) {
+                countSelected(oNode.children);
+              }
+            });
+          }
+
+          countSelected(oModel.getData().treeData);
+
+          oViewState.setProperty("/selectedCount", iCount);
+          oViewState.setProperty("/showBulkActions", iCount > 0);
+        },
+
+        _updateButtonAnimations: function (bHasSelection) {
+          // Add pulse animation to buttons when items are selected
+          setTimeout(function () {
+            var aApproveButtons = document.querySelectorAll(".approveButton");
+            var aRejectButtons = document.querySelectorAll(".rejectButton");
+
+            aApproveButtons.forEach(function (oButton) {
+              if (bHasSelection) {
+                oButton.classList.add("pulse");
+                // Remove pulse after 3 seconds
+                setTimeout(function () {
+                  oButton.classList.remove("pulse");
+                }, 3000);
+              } else {
+                oButton.classList.remove("pulse");
+              }
             });
 
-            console.log("Dialog model data:", oDialogModel.getData());
+            aRejectButtons.forEach(function (oButton) {
+              if (bHasSelection) {
+                oButton.classList.add("pulse");
+                // Remove pulse after 3 seconds
+                setTimeout(function () {
+                  oButton.classList.remove("pulse");
+                }, 3000);
+              } else {
+                oButton.classList.remove("pulse");
+              }
+            });
+          }, 100);
+        },
+        _getSelectedLeafItems: function () {
+          var oData = this.getView().getModel("treeData").getData();
+          var aItems = [];
 
-            // 2) Load fragment once
-            if (!this._oApprovalDialog) {
-                console.log("Loading approval dialog fragment...");
-                this._sDialogFragmentId = this.getView().getId() + "--ApprovalDialog"; // IMPORTANT
-                this._oApprovalDialog = await sap.ui.core.Fragment.load({
-                    id: this._sDialogFragmentId,
-                    name: "com.incresol.zpaymentworkflow.view.ApprovalDialog", // <-- CHANGE to your fragment path
-                    controller: this
-                });
-                this.getView().addDependent(this._oApprovalDialog);
-                console.log("Dialog fragment loaded and added as dependent");
-            }
+          function traverse(aNodes) {
+            aNodes.forEach(function (oNode) {
+              if (!oNode.children && oNode.selected) {
+                aItems.push(oNode);
+              }
+              if (oNode.children && oNode.children.length) {
+                traverse(oNode.children);
+              }
+            });
+          }
 
-            // 3) Set model on dialog (THIS IS THE KEY)
-            this._oApprovalDialog.setModel(oDialogModel, "dialogModel");
-            console.log("Dialog model set");
+          traverse(oData.treeData);
+          return aItems;
+        },
+        onApproveButtonPress: function () {
+          var aSelectedItems = this._getSelectedLeafItems();
 
-            // 4) Store selected items + action in controller for processing
-            this._aDialogSelectedItems = aSelectedItems;
-            this._sDialogActionType = sActionType;
+          if (!aSelectedItems.length) {
+            sap.m.MessageToast.show("Please select items to approve");
+            return;
+          }
 
-            console.log("Stored dialog data:");
-            console.log("  _aDialogSelectedItems:", this._aDialogSelectedItems);
-            console.log("  _sDialogActionType:", this._sDialogActionType);
+          this._openApprovalDialog(aSelectedItems, "APPROVE");
+        },
+        onRejectButtonPress: function () {
+          var aSelectedItems = this._getSelectedLeafItems();
 
-            // 5) Open
-            console.log("Opening dialog...");
-            this._oApprovalDialog.open();
-            console.log("Dialog opened");
+          if (!aSelectedItems.length) {
+            sap.m.MessageToast.show("Please select items to reject");
+            return;
+          }
+
+          this._openApprovalDialog(aSelectedItems, "REJECT");
         },
 
+        _openApprovalDialog: async function (aSelectedItems, sActionType) {
+          console.log("=== _openApprovalDialog CALLED ===");
+          console.log("Selected Items Count:", aSelectedItems.length);
+          console.log("Action Type:", sActionType);
+          console.log("Selected Items:", aSelectedItems);
 
-  handleDialogConfirm: function () {
-    console.log("=== handleDialogConfirm CALLED ===");
+          var sDialogTitle =
+            sActionType === "APPROVE" ? "Approve Items" : "Reject Items";
 
-    var sActionType = this._sDialogActionType; // "APPROVE" or "REJECT"
-    var aSelectedItems = this._aDialogSelectedItems || [];
+          // 1) Prepare dialog model data
+          var oDialogModel = new sap.ui.model.json.JSONModel({
+            title: sDialogTitle,
+            actionType: sActionType === "APPROVE" ? "Approve" : "Reject",
+            itemCount: aSelectedItems.length,
+            selectedItems: aSelectedItems,
+          });
 
-    console.log("Dialog Action Type:", sActionType);
-    console.log("Dialog Selected Items:", aSelectedItems);
-    console.log("Dialog Selected Items Count:", aSelectedItems.length);
+          console.log("Dialog model data:", oDialogModel.getData());
 
-    /* ================= REJECT VALIDATION ================= */
-    if (sActionType === "REJECT") {
-        console.log("=== VALIDATING HOD REMARKS FOR REJECTION ===");
+          // 2) Load fragment once
+          if (!this._oApprovalDialog) {
+            console.log("Loading approval dialog fragment...");
+            this._sDialogFragmentId =
+              this.getView().getId() + "--ApprovalDialog"; // IMPORTANT
+            this._oApprovalDialog = await sap.ui.core.Fragment.load({
+              id: this._sDialogFragmentId,
+              name: "com.incresol.zpaymentworkflow.view.ApprovalDialog", // <-- CHANGE to your fragment path
+              controller: this,
+            });
+            this.getView().addDependent(this._oApprovalDialog);
+            console.log("Dialog fragment loaded and added as dependent");
+          }
 
-        var aItemsWithoutRemarks = [];
+          // 3) Set model on dialog (THIS IS THE KEY)
+          this._oApprovalDialog.setModel(oDialogModel, "dialogModel");
+          console.log("Dialog model set");
 
-        aSelectedItems.forEach(function (oItem) {
-            // Validate ONLY leaf items
-            if (!oItem.isHeader) {
-                if (!oItem.HodApprRemarks || oItem.HodApprRemarks.trim() === "") {
-                    aItemsWithoutRemarks.push(oItem);
+          // 4) Store selected items + action in controller for processing
+          this._aDialogSelectedItems = aSelectedItems;
+          this._sDialogActionType = sActionType;
+
+          console.log("Stored dialog data:");
+          console.log("  _aDialogSelectedItems:", this._aDialogSelectedItems);
+          console.log("  _sDialogActionType:", this._sDialogActionType);
+
+          // 5) Open
+          console.log("Opening dialog...");
+          this._oApprovalDialog.open();
+          console.log("Dialog opened");
+        },
+
+        handleDialogConfirm: function () {
+          console.log("=== handleDialogConfirm CALLED ===");
+
+          var sActionType = this._sDialogActionType; // "APPROVE" or "REJECT"
+          var aSelectedItems = this._aDialogSelectedItems || [];
+
+          console.log("Dialog Action Type:", sActionType);
+          console.log("Dialog Selected Items:", aSelectedItems);
+          console.log("Dialog Selected Items Count:", aSelectedItems.length);
+
+          /* ================= REJECT VALIDATION ================= */
+          if (sActionType === "REJECT") {
+            console.log("=== VALIDATING HOD REMARKS FOR REJECTION ===");
+
+            var aItemsWithoutRemarks = [];
+
+            aSelectedItems.forEach(function (oItem) {
+              // Validate ONLY leaf items
+              if (!oItem.isHeader) {
+                if (
+                  !oItem.AudApprRemarks ||
+                  oItem.AudApprRemarks.trim() === ""
+                ) {
+                  aItemsWithoutRemarks.push(oItem);
                 }
-            }
-        });
+              }
+            });
 
-        // ❌ Block reject if HOD remarks missing
-        if (aItemsWithoutRemarks.length > 0) {
-            console.log("❌ REJECTION BLOCKED - Missing HOD remarks");
+            // ❌ Block reject if Auditor remarks missing
+            if (aItemsWithoutRemarks.length > 0) {
+              console.log("❌ REJECTION BLOCKED - Missing Auditor remarks");
 
-            var sErrorMessage =
-                "HOD Remarks are mandatory for rejection.\n\n" +
+              var sErrorMessage =
+                "Auditor Remarks are mandatory for rejection.\n\n" +
                 "Missing remarks for the following items:\n\n";
 
-            aItemsWithoutRemarks.forEach(function (oItem, iIndex) {
+              aItemsWithoutRemarks.forEach(function (oItem, iIndex) {
                 sErrorMessage +=
-                    (iIndex + 1) + ". " +
-                    "Approval: " + oItem.ApprovalNo +
-                    " | Item: " + oItem.ItemNum +
-                    " | inovice no: " + (oItem.DocNum || "") +
-                    "\n";
-            });
+                  iIndex +
+                  1 +
+                  ". " +
+                  "Approval: " +
+                  oItem.ApprovalNo +
+                  " | Item: " +
+                  oItem.ItemNum +
+                  " | inovice no: " +
+                  (oItem.DocNum || "") +
+                  "\n";
+              });
 
-            sap.m.MessageBox.error(sErrorMessage, {
-                title: "HOD Remarks Required"
-            });
+              sap.m.MessageBox.error(sErrorMessage, {
+                title: "HOD Remarks Required",
+              });
 
-            // ⛔ Do NOT close dialog
-            return;
-        }
+              // ⛔ Do NOT close dialog
+              return;
+            }
 
-        console.log("✅ All selected items have HOD remarks");
-    }
+            console.log("✅ All selected items have HOD remarks");
+          }
 
-    /* ================= PROCEED ================= */
-    console.log("=== CLOSING DIALOG ===");
-    this._oApprovalDialog.close();
+          /* ================= PROCEED ================= */
+          console.log("=== CLOSING DIALOG ===");
+          this._oApprovalDialog.close();
 
-    console.log("=== CALLING _processBulkAction ===");
-    this._processBulkAction(aSelectedItems, sActionType);
-}
-
-,
-
+          console.log("=== CALLING _processBulkAction ===");
+          this._processBulkAction(aSelectedItems, sActionType);
+        },
 
         handleDialogCancel: function () {
-            console.log("=== handleDialogCancel CALLED ===");
-            if (this._oApprovalDialog) {
-                this._oApprovalDialog.close();
-            }
+          console.log("=== handleDialogCancel CALLED ===");
+          if (this._oApprovalDialog) {
+            this._oApprovalDialog.close();
+          }
         },
 
         onDialogAfterClose: function () {
-            console.log("=== onDialogAfterClose CALLED ===");
-            // Optional cleanup - dialog closed
+          console.log("=== onDialogAfterClose CALLED ===");
+          // Optional cleanup - dialog closed
         },
-         onOpenColumnSettings: function () {
-            if (!this._oColumnDialog) {
-                this._oColumnDialog = sap.ui.xmlfragment(
-                    "com.incresol.zpaymentworkflow.view.ColumnSettings",
-                    this
-                );
-                this.getView().addDependent(this._oColumnDialog);
+        onOpenColumnSettings: function () {
+          if (!this._oColumnDialog) {
+            this._oColumnDialog = sap.ui.xmlfragment(
+              "com.incresol.zpaymentworkflow.view.ColumnSettings",
+              this,
+            );
+            this.getView().addDependent(this._oColumnDialog);
+          }
+          this._oColumnDialog.open();
+        },
+
+        onApplyColumnSettings: function () {
+          // this._applyColumnsOnly(); // apply immediately
+
+          if (!this._oSaveLayoutDialog) {
+            this._oSaveLayoutDialog = sap.ui.xmlfragment(
+              "com.incresol.zpaymentworkflow.view.SaveLayoutDialog",
+              this,
+            );
+            this.getView().addDependent(this._oSaveLayoutDialog);
+          }
+
+          // Reset dialog state
+          sap.ui.getCore().byId("idConfirmBox").setVisible(true);
+          sap.ui.getCore().byId("idInputBox").setVisible(false);
+          sap.ui.getCore().byId("idLayoutNameInput").setValue("");
+
+          this._oSaveLayoutDialog.open();
+        },
+        _applyColumnsOnly: function () {
+          const oTable = this.byId("idTreeTable");
+          const aColumns = this.getView()
+            .getModel("columnModel")
+            .getProperty("/columns");
+
+          oTable.getColumns().forEach((col) => col.setVisible(false));
+
+          aColumns.forEach((col) => {
+            const oCol = this.byId(col.id);
+            if (oCol) {
+              oCol.setVisible(col.visible);
             }
-            this._oColumnDialog.open();
-
+          });
         },
 
-onApplyColumnSettings: function () {
-    // this._applyColumnsOnly(); // apply immediately
+        onSkipSaveLayout: function () {
+          const oTable = this.byId("idTreeTable");
+          const aColumns = this.getView()
+            .getModel("columnModel")
+            .getProperty("/columns");
 
-    if (!this._oSaveLayoutDialog) {
-        this._oSaveLayoutDialog = sap.ui.xmlfragment(
-            "com.incresol.zpaymentworkflow.view.SaveLayoutDialog",
-            this
-        );
-        this.getView().addDependent(this._oSaveLayoutDialog);
-    }
+          aColumns.forEach((col) => {
+            const oColumn = this.byId(col.id);
+            if (oColumn) {
+              oColumn.setVisible(col.visible);
+            }
+          });
 
-    // Reset dialog state
-    sap.ui.getCore().byId("idConfirmBox").setVisible(true);
-    sap.ui.getCore().byId("idInputBox").setVisible(false);
-    sap.ui.getCore().byId("idLayoutNameInput").setValue("");
+          this._oColumnDialog.close();
+          console.log("Applied column settings:", aColumns);
+          this._oSaveLayoutDialog.close();
+          sap.m.MessageToast.show("Layout applied locally");
+        },
+        onConfirmSaveLayout: function () {
+          var oModel = this.getView().getModel("oModel");
 
-    this._oSaveLayoutDialog.open();
-},
-_applyColumnsOnly: function () {
-    const oTable = this.byId("idTreeTable");
-    const aColumns = this.getView().getModel("columnModel").getProperty("/columns");
-
-    oTable.getColumns().forEach(col => col.setVisible(false));
-
-    aColumns.forEach(col => {
-        const oCol = this.byId(col.id);
-        if (oCol) {
-            oCol.setVisible(col.visible);
-        }
-    });
-},
-
-
-onSkipSaveLayout: function () {
-    const oTable = this.byId("idTreeTable");
-            const aColumns = this.getView().getModel("columnModel").getProperty("/columns");
-
-            aColumns.forEach(col => {
-                const oColumn = this.byId(col.id);
-                if (oColumn) {
-                    oColumn.setVisible(col.visible);
-                }
-            });
-
-            this._oColumnDialog.close();
-            console.log("Applied column settings:", aColumns);
-    this._oSaveLayoutDialog.close();
-    sap.m.MessageToast.show("Layout applied locally");
-},
-onConfirmSaveLayout: function () {
-    var oModel = this.getView().getModel("oModel");
-
-    if (!this._oLayoutNameDialog) {
-
-        this._oLayoutNameInput = new sap.m.Input({
-            placeholder: "Enter layout name",
-            liveChange: function (oEvent) {
+          if (!this._oLayoutNameDialog) {
+            this._oLayoutNameInput = new sap.m.Input({
+              placeholder: "Enter layout name",
+              liveChange: function (oEvent) {
                 var sValue = oEvent.getParameter("value");
                 this._oLayoutSaveBtn.setEnabled(!!sValue.trim());
-            }.bind(this)
-        });
+              }.bind(this),
+            });
 
-        this._oLayoutSaveBtn = new sap.m.Button({
-            text: "Save",
-            type: "Emphasized",
-            enabled: false,
-            press: function () {
-
+            this._oLayoutSaveBtn = new sap.m.Button({
+              text: "Save",
+              type: "Emphasized",
+              enabled: false,
+              press: function () {
                 /* ===== 1. Layout Name ===== */
                 var sLayoutName = this._oLayoutNameInput.getValue().trim();
                 if (!sLayoutName) {
-                    sap.m.MessageToast.show("Please enter layout name");
-                    return;
+                  sap.m.MessageToast.show("Please enter layout name");
+                  return;
                 }
 
                 /* ===== 2. Column Model ===== */
-                var aColumns = this.getView()
+                var aColumns =
+                  this.getView()
                     .getModel("columnModel")
                     .getProperty("/columns") || [];
 
                 /* ===== 3. Column → Backend Field Map ===== */
                 var mFieldMap = this._getColumnFieldMap();
+                var sUserId = this.getView()
+                  .getModel("localUser")
+                  .getProperty("/UserName");
 
                 /* ===== 4. Base Payload (ALL FIELDS) ===== */
                 var oPayload = {
-                    UserId: "INCRESOL",
-                    LayoutName: sLayoutName.toUpperCase(),
+                  UserId: sUserId,
+                  LayoutName: sLayoutName.toUpperCase(),
 
-                    ApprovalNo:"X",
-                ProfitCenter: "X",
-                    ProfitCenterName: "X",
-                    VendorCode: "X",
-                    VendorName: "",
-                    CompanyCode: "",
-                    CreationTime: "",
-                    CreatedOn: "",
-                    CreatedBy: "",
-                    OverallStatus: "",
-                    DocNum: "",
-                    ItemNum: "",
-                    LiabHead: "",
-                    ReferenceDoc: "",
-                    PurchDoc: "",
-                    DocDate: "",
-                    PostingDt: "",
-                    GrossAmt: "",
-                    BaseAmt: "",
-                    GstAmt: "",
-                    TdsAmount: "",
-                    TotalLiability: "",
-                    Gst2aRef: "",
-                    Gst2aNref: "",
-                    AmtClaimed: "",
-                    AprnoRef: "",
-                    ProposedAmt: "",
-                    Currency: "",
-                    TaxNum: "",
-                    Gstr1Details: "",
-                    Remark: "",
-                    AccountHolder: "",
-                    AccountNumber: "",
-                    BankName: "",
-                    Branch: "",
-                    BankKey: "",
-                    PmApprAmt: "",
-                    PmUserId: "",
-                    PmApprStatus: "",
-                    PmApprOn: "",
-                    PmApprRemarks: "",
-                    HodApprAmt: "",
-                    HodUserId: "",
-                    HodApprStatus: "",
-                    HodApprOn: "",
-                    HodApprRemarks: "",
-                    CfoApprAmt: "",
-                    CfoUserId: "",
-                    CfoApprStatus: "",
-                    CfoApprOn: "",
-                    CfoApprRemarks: "",
-                    AudApprAmt: "",
-                    AudUserId: "",
-                    AudApprStatus: "",
-                    AudApprOn: "",
-                    AudApprRemarks: "",
-                    DirApprAmt: "",
-                    DirUserId: "",
-                    DirApprStatus: "",
-                    DirApprOn: "",
-                    DirApprRemarks: "",
-                    ModeOfPayment: "",
-                    UtrNo: "",
-                    PaidAmount1: "",
-                    PaymentDate1: "",
-                    PaidAmount2: "",
-                    PaymentDate2: "",
-                    TotalBalOut: "",
-                    BalancePayable: ""
+                  ApprovalNo: "X",
+                  ProfitCenter: "X",
+                  ProfitCenterName: "X",
+                  VendorCode: "X",
+                  VendorName: "",
+                  CompanyCode: "",
+                  CreationTime: "",
+                  CreatedOn: "",
+                  CreatedBy: "",
+                  OverallStatus: "",
+                  DocNum: "",
+                  ItemNum: "",
+                  LiabHead: "",
+                  ReferenceDoc: "",
+                  PurchDoc: "",
+                  DocDate: "",
+                  PostingDt: "",
+                  GrossAmt: "",
+                  BaseAmt: "",
+                  GstAmt: "",
+                  TdsAmount: "",
+                  TotalLiability: "",
+                  Gst2aRef: "",
+                  Gst2aNref: "",
+                  AmtClaimed: "",
+                  AprnoRef: "",
+                  ProposedAmt: "",
+                  Currency: "",
+                  TaxNum: "",
+                  Gstr1Details: "",
+                  Remark: "",
+                  AccountHolder: "",
+                  AccountNumber: "",
+                  BankName: "",
+                  Branch: "",
+                  BankKey: "",
+                  PmApprAmt: "",
+                  PmUserId: "",
+                  PmApprStatus: "",
+                  PmApprOn: "",
+                  PmApprRemarks: "",
+                  HodApprAmt: "",
+                  HodUserId: "",
+                  HodApprStatus: "",
+                  HodApprOn: "",
+                  HodApprRemarks: "",
+                  CfoApprAmt: "",
+                  CfoUserId: "",
+                  CfoApprStatus: "",
+                  CfoApprOn: "",
+                  CfoApprRemarks: "",
+                  AudApprAmt: "",
+                  AudUserId: "",
+                  AudApprStatus: "",
+                  AudApprOn: "",
+                  AudApprRemarks: "",
+                  DirApprAmt: "",
+                  DirUserId: "",
+                  DirApprStatus: "",
+                  DirApprOn: "",
+                  DirApprRemarks: "",
+                  ModeOfPayment: "",
+                  UtrNo: "",
+                  PaidAmount1: "",
+                  PaymentDate1: "",
+                  PaidAmount2: "",
+                  PaymentDate2: "",
+                  TotalBalOut: "",
+                  BalancePayable: "",
                 };
 
                 /* ===== 5. Fill X / "" based on visibility ===== */
                 aColumns.forEach(function (col) {
-                    var sBackendField = mFieldMap[col.id];
-                    if (sBackendField && oPayload.hasOwnProperty(sBackendField)) {
-                        oPayload[sBackendField] = col.visible ? "X" : "";
-                    }
+                  var sBackendField = mFieldMap[col.id];
+                  if (sBackendField && oPayload.hasOwnProperty(sBackendField)) {
+                    oPayload[sBackendField] = col.visible ? "X" : "";
+                  }
                 });
 
                 console.log("Final UserLayoutParametersSet Payload:", oPayload);
@@ -963,668 +1107,698 @@ onConfirmSaveLayout: function () {
                 console.log("Using OData model 😊😊😊😊😊😊😊😊😊:", oModel);
 
                 oModel.create("/UserLayoutParametersSet", oPayload, {
-                    success: function () {
-
-                        if (this._oColumnDialog) {
-                            this._oColumnDialog.close();
-                        }
-                        if (this._oSaveLayoutDialog) {
-                            this._oSaveLayoutDialog.close();
-                        }
-
-                        this._oLayoutNameDialog.close();
-
-                        sap.m.MessageToast.show(sLayoutName + " layout is saved");
-
-                    }.bind(this),
-                    error: function (oError) {
-                        sap.m.MessageToast.show("Failed to save layout");
-                        console.error("Layout save error", oError);
+                  success: function () {
+                    if (this._oColumnDialog) {
+                      this._oColumnDialog.close();
                     }
+                    if (this._oSaveLayoutDialog) {
+                      this._oSaveLayoutDialog.close();
+                    }
+
+                    this._oLayoutNameDialog.close();
+
+                    sap.m.MessageToast.show(sLayoutName + " layout is saved");
+                  }.bind(this),
+                  error: function (oError) {
+                    sap.m.MessageToast.show("Failed to save layout");
+                    console.error("Layout save error", oError);
+                  },
                 });
+              }.bind(this),
+            });
 
-            }.bind(this)
-        });
-
-        this._oLayoutNameDialog = new sap.m.Dialog({
-            title: "Save Layout",
-            contentWidth: "400px",
-            content: [
+            this._oLayoutNameDialog = new sap.m.Dialog({
+              title: "Save Layout",
+              contentWidth: "400px",
+              content: [
                 new sap.m.Label({
-                    text: "Layout Name",
-                    labelFor: this._oLayoutNameInput
+                  text: "Layout Name",
+                  labelFor: this._oLayoutNameInput,
                 }),
-                this._oLayoutNameInput
-            ],
-            beginButton: this._oLayoutSaveBtn,
-            endButton: new sap.m.Button({
+                this._oLayoutNameInput,
+              ],
+              beginButton: this._oLayoutSaveBtn,
+              endButton: new sap.m.Button({
                 text: "Cancel",
                 press: function () {
-                    this._oLayoutNameDialog.close();
-                }.bind(this)
-            }),
-            afterClose: function () {
+                  this._oLayoutNameDialog.close();
+                }.bind(this),
+              }),
+              afterClose: function () {
                 this._oLayoutNameInput.setValue("");
                 this._oLayoutSaveBtn.setEnabled(false);
-            }.bind(this)
-        });
+              }.bind(this),
+            });
 
-        this.getView().addDependent(this._oLayoutNameDialog);
-    }
+            this.getView().addDependent(this._oLayoutNameDialog);
+          }
 
-    this._oLayoutNameDialog.open();
-}
+          this._oLayoutNameDialog.open();
+        },
 
+        _getColumnFieldMap: function () {
+          return {
+            /* ===== HEADER LEVEL ===== */
+            idColApprovalNoteNo: "ApprovalNo",
+            colDate: "CreatedOn",
+            colProfitCenter: "ProfitCenter",
+            colProfitCente: "ProfitCenterName",
+            colCompanyCode: "CompanyCode",
+            colCreatedBy: "CreatedBy",
+            colCreationTime: "CreationTime",
+            colItemCount: "ItemNum",
 
+            /* ===== VENDOR / BASIC ===== */
+            colVendorCode: "VendorCode",
+            colVendorName: "VendorName",
 
+            /* ===== DOCUMENT DETAILS ===== */
+            colDocumentNumber: "DocNum",
+            colInvoiceNo: "DocNum",
+            colPurchaseOrder: "PurchDoc",
+            colDocumentDate: "DocDate",
+            colPostingDate: "PostingDt",
+            colReferenceDocument: "ReferenceDoc",
 
-,
-_getColumnFieldMap: function () {
-    return {
-        /* ===== HEADER LEVEL ===== */
-        idColApprovalNoteNo: "ApprovalNo",
-        colDate: "CreatedOn",
-        colProfitCenter: "ProfitCenter",
-        colProfitCente: "ProfitCenterName",
-        colCompanyCode: "CompanyCode",
-        colCreatedBy: "CreatedBy",
-        colCreationTime: "CreationTime",
-        colItemCount: "ItemNum",
+            /* ===== LIABILITY / TAX ===== */
+            colLiabilityHead: "LiabHead",
+            colTaxNumber: "TaxNum",
+            colGstr1Details: "Gstr1Details",
 
-        /* ===== VENDOR / BASIC ===== */
-        colVendorCode: "VendorCode",
-        colVendorName: "VendorName",
+            /* ===== AMOUNTS ===== */
+            colGrossAmt: "GrossAmt",
+            colGST: "GstAmt",
+            colTDS: "TdsAmount",
+            colTotalLiability: "TotalLiability",
+            colAmtClaimed: "AmtClaimed",
+            colAmtAlreadyClaimed: "AmtClaimed",
+            colAmtProposed: "ProposedAmt",
+            colGst2aRef: "Gst2aRef",
+            colGst2aNref: "Gst2aNref",
 
-        /* ===== DOCUMENT DETAILS ===== */
-        colDocumentNumber: "DocNum",
-        colInvoiceNo: "DocNum",
-        colPurchaseOrder: "PurchDoc",
-        colDocumentDate: "DocDate",
-        colPostingDate: "PostingDt",
-        colReferenceDocument: "ReferenceDoc",
+            /* ===== PM / APPROVAL ===== */
+            colPmApprAmt: "PmApprAmt",
+            colPmStatus: "PmApprStatus",
+            colPmRemark: "PmApprRemarks",
 
-        /* ===== LIABILITY / TAX ===== */
-        colLiabilityHead: "LiabHead",
-        colTaxNumber: "TaxNum",
-        colGstr1Details: "Gstr1Details",
+            /* ===== BANK DETAILS ===== */
+            colBankName: "BankName",
+            colAccountNumber: "AccountNumber",
+            colAccountHolder: "AccountHolder",
+            colBankKey: "BankKey",
 
-        /* ===== AMOUNTS ===== */
-        colGrossAmt: "GrossAmt",
-        colGST: "GstAmt",
-        colTDS: "TdsAmount",
-        colTotalLiability: "TotalLiability",
-        colAmtClaimed: "AmtClaimed",
-        colAmtAlreadyClaimed: "AmtClaimed",
-        colAmtProposed: "ProposedAmt",
-        colGst2aRef: "Gst2aRef",
-        colGst2aNref: "Gst2aNref",
+            /* ===== CURRENCY ===== */
+            colCurrency: "Currency",
 
-        /* ===== PM / APPROVAL ===== */
-        colPmApprAmt: "PmApprAmt",
-        colPmStatus: "PmApprStatus",
-        colPmRemark: "PmApprRemarks",
+            /* ===== GENERAL ===== */
+            colGeneralRemark: "Remark",
 
-        /* ===== BANK DETAILS ===== */
-        colBankName: "BankName",
-        colAccountNumber: "AccountNumber",
-        colAccountHolder: "AccountHolder",
-        colBankKey: "BankKey",
-
-        /* ===== CURRENCY ===== */
-        colCurrency: "Currency",
-
-        /* ===== GENERAL ===== */
-        colGeneralRemark: "Remark",
-
-        /* ===== TOTALS ===== */
-        colTotalLiability: "TotalLiability"
-    };
-}
-,
-
-
-
-
-
+            /* ===== TOTALS ===== */
+            colTotalLiability: "TotalLiability",
+          };
+        },
         onCloseColumnSettings: function () {
-            this._oColumnDialog.close();
+          this._oColumnDialog.close();
         },
         /* ===================================================== */
-/* =============== SELECT LAYOUT LOGIC ================= */
-/* ===================================================== */
+        /* =============== SELECT LAYOUT LOGIC ================= */
+        /* ===================================================== */
 
+        onOpenLayoutDialog: function () {
+          if (!this._oLayoutDialog) {
+            this._oLayoutDialog = sap.ui.xmlfragment(
+              this.getView().getId(),
+              "com.incresol.zpaymentworkflow.view.LayoutDialog",
+              this,
+            );
+            this.getView().addDependent(this._oLayoutDialog);
+          }
 
+          var oModel = this.getView().getModel("oModel");
 
-onOpenLayoutDialog: function () {
+          // 🔹 Get Logged-in User
+          var sUserId = this.getView()
+            .getModel("localUser")
+            .getProperty("/UserName");
 
-    if (!this._oLayoutDialog) {
-        this._oLayoutDialog = sap.ui.xmlfragment(
-            this.getView().getId(),
-            "com.incresol.zpaymentworkflow.view.LayoutDialog",
-            this
-        );
-        this.getView().addDependent(this._oLayoutDialog);
-    }
+          oModel.read("/UserLayoutParametersSet", {
+            success: function (oData) {
+              var sUserName = oData.results[0].UserName;
 
-    var oModel = this.getView().getModel("oModel");
+              var aLayouts = [];
 
-    oModel.read("/UserLayoutParametersSet", {
-        success: function (oData) {
-
-            var aLayouts = [];
-
-            // 🔹 1️⃣ MANUAL DEFAULT ROW (ALWAYS FIRST)
-            aLayouts.push({
+              // 🔹 1️⃣ MANUAL DEFAULT ROW (ALWAYS FIRST)
+              aLayouts.push({
                 id: "DEFAULT",
                 name: "Default",
                 isDefault: true,
-                isManual: true   // helpful flag
-            });
+                isManual: true,
+              });
 
-            // 🔹 2️⃣ BACKEND LAYOUTS
-            (oData.results || []).forEach(function (oItem) {
-                aLayouts.push({
+              // 🔹 2️⃣ FILTER BY USERNAME
+              (oData.results || []).forEach(function (oItem) {
+                if (oItem.UserId === sUserId) {
+                  // 🔹 USER CHECK
+
+                  aLayouts.push({
                     id: oItem.LayoutName,
                     name: oItem.LayoutName,
                     isDefault: false,
-                    isManual: false
-                });
-            });
+                    isManual: false,
+                  });
+                }
+              });
 
-            var oLayoutModel = new sap.ui.model.json.JSONModel({
-                layouts: aLayouts
-            });
+              var oLayoutModel = new sap.ui.model.json.JSONModel({
+                layouts: aLayouts,
+              });
 
-            this.getView().setModel(oLayoutModel, "layoutModel");
+              this.getView().setModel(oLayoutModel, "layoutModel");
 
-            // 🔹 Preselect Default row
-            var oTable = sap.ui.getCore().byId(
-                this.getView().getId() + "--layoutTable"
+              var oTable = sap.ui
+                .getCore()
+                .byId(this.getView().getId() + "--layoutTable");
+
+              if (oTable && oTable.getItems().length > 0) {
+                oTable.setSelectedItem(oTable.getItems()[0]);
+              }
+
+              this._oLayoutDialog.open();
+            }.bind(this),
+
+            error: function () {
+              sap.m.MessageToast.show("Failed to load layouts");
+            },
+          });
+        },
+
+        onLayoutSelectionChange: function (oEvent) {
+          var oSelectedItem = oEvent.getParameter("listItem");
+          if (!oSelectedItem) {
+            return;
+          }
+
+          var oCtx = oSelectedItem.getBindingContext("layoutModel");
+          if (!oCtx) {
+            return;
+          }
+
+          var oSelectedObj = oCtx.getObject();
+          var sSelectedLayoutName = oSelectedObj.name;
+
+          /* ===================================================== */
+          /* =============== DEFAULT OPTION ====================== */
+          /* ===================================================== */
+          if (oSelectedObj.isDefault) {
+            // mark default selected
+            this._isDefaultLayoutSelected = true;
+            this._selectedBackendLayout = null;
+
+            const aColumns = this.getView()
+              .getModel("columnModel")
+              .getProperty("/columns");
+
+            // apply default (local) visibility
+            aColumns.forEach(
+              function (col) {
+                var oColumn = this.byId(col.id);
+                if (oColumn) {
+                  oColumn.setVisible(col.visible);
+                }
+              }.bind(this),
             );
 
-            if (oTable) {
-                oTable.setSelectedItem(oTable.getItems()[0]);
-            }
+            console.log("Applied DEFAULT layout locally:", aColumns);
+            sap.m.MessageToast.show("Default layout selected");
 
-            this._oLayoutDialog.open();
+            return; // ⛔ stop backend call
+          }
 
-        }.bind(this),
+          /* ===================================================== */
+          /* =============== BACKEND LAYOUT ====================== */
+          /* ===================================================== */
 
-        error: function () {
-            sap.m.MessageToast.show("Failed to load layouts");
-        }
-    });
-}
+          this._isDefaultLayoutSelected = false;
 
+          var oModel = this.getView().getModel("oModel");
 
-
-,
-
-onLayoutSelectionChange: function (oEvent) {
-
-    var oSelectedItem = oEvent.getParameter("listItem");
-    if (!oSelectedItem) {
-        return;
-    }
-
-    var oCtx = oSelectedItem.getBindingContext("layoutModel");
-    if (!oCtx) {
-        return;
-    }
-
-    var oSelectedObj = oCtx.getObject();
-    var sSelectedLayoutName = oSelectedObj.name;
-    
-
-    /* ===================================================== */
-    /* =============== DEFAULT OPTION ====================== */
-    /* ===================================================== */
-    if (oSelectedObj.isDefault) {
-
-        // mark default selected
-        this._isDefaultLayoutSelected = true;
-        this._selectedBackendLayout = null;
-
-        const aColumns = this.getView()
-            .getModel("columnModel")
-            .getProperty("/columns");
-
-        // apply default (local) visibility
-        aColumns.forEach(function (col) {
-            var oColumn = this.byId(col.id);
-            if (oColumn) {
-                oColumn.setVisible(col.visible);
-            }
-        }.bind(this));
-
-        console.log("Applied DEFAULT layout locally:", aColumns);
-        sap.m.MessageToast.show("Default layout selected");
-
-        return; // ⛔ stop backend call
-    }
-
-    /* ===================================================== */
-    /* =============== BACKEND LAYOUT ====================== */
-    /* ===================================================== */
-
-    this._isDefaultLayoutSelected = false;
-
-    var oModel = this.getView().getModel("oModel");
-
-    oModel.read("/UserLayoutParametersSet", {
-        success: function (oData) {
-
-            var oLayout = (oData.results || []).find(function (oItem) {
+          oModel.read("/UserLayoutParametersSet", {
+            success: function (oData) {
+              var oLayout = (oData.results || []).find(function (oItem) {
                 return oItem.LayoutName === sSelectedLayoutName;
-            });
+              });
 
-            if (!oLayout) {
+              if (!oLayout) {
                 sap.m.MessageToast.show("Layout not found");
                 return;
-            }
+              }
 
-            console.log("Layout rules (visibility only):", oLayout);
+              console.log("Layout rules (visibility only):", oLayout);
 
-            // store backend layout for Apply
-            this._selectedBackendLayout = oLayout;
+              // store backend layout for Apply
+              this._selectedBackendLayout = oLayout;
+            }.bind(this),
 
-        }.bind(this),
+            error: function () {
+              sap.m.MessageToast.show("Failed to load layout");
+            },
+          });
+        },
 
-        error: function () {
-            sap.m.MessageToast.show("Failed to load layout");
-        }
-    });
-}
-
-,
-_applyBackendLayoutToTreeTable: function (oLayoutData) {
-
-    var oTreeTable = this.byId("idTreeTable");
-    if (!oTreeTable || !oLayoutData) {
-        return;
-    }
-
-    var mFieldMap = this._getColumnFieldMap();
-
-    // 🔹 Hide all mapped columns first
-    oTreeTable.getColumns().forEach(function (oColumn) {
-        var sColumnId = oColumn.getId().split("--").pop();
-        if (mFieldMap[sColumnId]) {
-            oColumn.setVisible(false);
-        }
-    });
-
-    // 🔹 Apply backend visibility
-    oTreeTable.getColumns().forEach(function (oColumn) {
-        var sColumnId = oColumn.getId().split("--").pop();
-        var sBackendField = mFieldMap[sColumnId];
-
-        if (!sBackendField) {
+        _applyBackendLayoutToTreeTable: function (oLayoutData) {
+          var oTreeTable = this.byId("idTreeTable");
+          if (!oTreeTable || !oLayoutData) {
             return;
-        }
+          }
 
-        oColumn.setVisible(oLayoutData[sBackendField] === "X");
-    });
-}
+          var mFieldMap = this._getColumnFieldMap();
 
-,
-
-onApplyLayout: function () {
-
-    /* ===================================================== */
-    /* =============== DEFAULT LAYOUT ====================== */
-    /* ===================================================== */
-    if (this._isDefaultLayoutSelected) {
-
-        if (!this._defaultLayoutColumns) {
-            sap.m.MessageToast.show("Default layout not available");
-            return;
-        }
-
-        this._defaultLayoutColumns.forEach(function (col) {
-            var oColumn = this.byId(col.id);
-            if (oColumn) {
-                oColumn.setVisible(col.visible);
+          // 🔹 Hide all mapped columns first
+          oTreeTable.getColumns().forEach(function (oColumn) {
+            var sColumnId = oColumn.getId().split("--").pop();
+            if (mFieldMap[sColumnId]) {
+              oColumn.setVisible(false);
             }
-        }.bind(this));
+          });
 
-        sap.m.MessageToast.show("Default layout applied");
+          // 🔹 Apply backend visibility
+          oTreeTable.getColumns().forEach(function (oColumn) {
+            var sColumnId = oColumn.getId().split("--").pop();
+            var sBackendField = mFieldMap[sColumnId];
 
-        if (this._oLayoutDialog) {
-            this._oLayoutDialog.close();
-        }
-
-        return;
-    }
-
-    /* ===================================================== */
-    /* =============== BACKEND LAYOUT ====================== */
-    /* ===================================================== */
-    if (!this._selectedBackendLayout) {
-        sap.m.MessageToast.show("Please select a layout");
-        return;
-    }
-
-    this._applyBackendLayoutToTreeTable(this._selectedBackendLayout);
-
-    sap.m.MessageToast.show(
-        "Layout applied: " + this._selectedBackendLayout.LayoutName
-    );
-
-    if (this._oLayoutDialog) {
-        this._oLayoutDialog.close();
-    }
-}
-
-
-
-
-,
-
-onCloseLayoutDialog: function () {
-    if (this._oLayoutDialog) {
-        this._oLayoutDialog.close();
-    }
-}
-,
-_captureDefaultLayout: function () {
-    var oTreeTable = this.byId("idTreeTable");
-    if (!oTreeTable) {
-        return;
-    }
-
-    this._defaultLayoutColumns = oTreeTable.getColumns().map(function (oColumn) {
-        return {
-            id: oColumn.getId().split("--").pop(),
-            visible: oColumn.getVisible()
-        };
-    });
-
-    console.log("📌 Default layout captured:", this._defaultLayoutColumns);
-}
-
-,
-onDeleteLayout: function (oEvent) {
-
-    // 1️⃣ Get clicked row
-    var oButton = oEvent.getSource();
-    var oRow = oButton.getParent(); // ColumnListItem
-    var oCtx = oRow.getBindingContext("layoutModel");
-
-    if (!oCtx) {
-        return;
-    }
-
-    // 2️⃣ Get layout data
-    var oLayout = oCtx.getObject();
-    var sLayoutName = oLayout.name;
-
-    var oView = this.getView();
-    var oODataModel = oView.getModel("oModel");
-
-    // 3️⃣ First READ user from backend
-    oODataModel.read("/UserApprovalLevelSet", {
-        success: function (oData) {
-
-            if (!oData.results || oData.results.length === 0) {
-                sap.m.MessageBox.error("User verification data not found");
-                return;
+            if (!sBackendField) {
+              return;
             }
 
-            // 🔹 Take first record
-            var sUserName = oData.results[0].UserName;
+            oColumn.setVisible(oLayoutData[sBackendField] === "X");
+          });
+        },
 
-            // 4️⃣ Confirm delete
-            sap.m.MessageBox.confirm(
-                'Are you sure you want to delete layout "' + sLayoutName + '"?',
-                {
-                    title: "Delete Layout",
-                    actions: [
-                        sap.m.MessageBox.Action.OK,
-                        sap.m.MessageBox.Action.CANCEL
-                    ],
-                    onClose: function (sAction) {
+        onApplyLayout: function () {
+          /* ===================================================== */
+          /* =============== DEFAULT LAYOUT ====================== */
+          /* ===================================================== */
+          if (this._isDefaultLayoutSelected) {
+            if (!this._defaultLayoutColumns) {
+              sap.m.MessageToast.show("Default layout not available");
+              return;
+            }
 
-                        if (sAction !== sap.m.MessageBox.Action.OK) {
-                            return;
-                        }
-
-                        // 5️⃣ DELETE call with LayoutName + UserName
-                        var sPath =
-                            "/UserLayoutParametersSet(" +
-                            "UserId='" + encodeURIComponent(sUserName) + "'," +
-                            "LayoutName='" + encodeURIComponent(sLayoutName) + "'" +
-                            
-                            ")";
-                            
-
-                        oODataModel.remove(sPath, {
-                            success: function () {
-
-                                // 6️⃣ Update UI model
-                                var oLayoutModel = oView.getModel("layoutModel");
-                                var aLayouts = oLayoutModel.getProperty("/layouts") || [];
-
-                                oLayoutModel.setProperty(
-                                    "/layouts",
-                                    aLayouts.filter(function (oItem) {
-                                        return oItem.name !== sLayoutName;
-                                    })
-                                );
-
-                                sap.m.MessageToast.show("Layout deleted successfully");
-                            },
-
-                            error: function (oError) {
-                                console.error("Delete failed", oError);
-                                sap.m.MessageToast.show("Failed to delete layout");
-                            }
-                        });
-                    }
+            this._defaultLayoutColumns.forEach(
+              function (col) {
+                var oColumn = this.byId(col.id);
+                if (oColumn) {
+                  oColumn.setVisible(col.visible);
                 }
+              }.bind(this),
             );
 
-        }.bind(this),
+            sap.m.MessageToast.show("Default layout applied");
 
-        error: function (oError) {
-            sap.m.MessageBox.error("Failed to fetch user data");
-            console.error(oError);
-        }
-    });
-}
-
-
-,
-
-        onTdsAmountChange: function (oEvent) {
-            var oInput = oEvent.getSource();
-            var oContext = oInput.getBindingContext("treeData");
-            var sNewValue = oEvent.getParameter("value");
-
-            // Validate numeric input
-            var fNewValue = parseFloat(sNewValue) || 0;
-            if (fNewValue < 0) {
-                fNewValue = 0;
-                oInput.setValue(fNewValue.toFixed(2));
-                MessageToast.show("TDS Amount cannot be negative");
-                return;
+            if (this._oLayoutDialog) {
+              this._oLayoutDialog.close();
             }
 
-            // Format to 2 decimal places
-            var sFormattedValue = fNewValue.toFixed(2);
-            oInput.setValue(sFormattedValue);
+            return;
+          }
 
-            // Update the tree data model
-            oContext.getModel().setProperty(oContext.getPath() + "/TdsAmount", sFormattedValue);
+          /* ===================================================== */
+          /* =============== BACKEND LAYOUT ====================== */
+          /* ===================================================== */
+          if (!this._selectedBackendLayout) {
+            sap.m.MessageToast.show("Please select a layout");
+            return;
+          }
 
-            console.log("TDS Amount updated in tree data model:", sFormattedValue);
-            MessageToast.show("TDS Amount updated to ₹" + fNewValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+          this._applyBackendLayoutToTreeTable(this._selectedBackendLayout);
+
+          sap.m.MessageToast.show(
+            "Layout applied: " + this._selectedBackendLayout.LayoutName,
+          );
+
+          if (this._oLayoutDialog) {
+            this._oLayoutDialog.close();
+          }
+        },
+
+        onCloseLayoutDialog: function () {
+          if (this._oLayoutDialog) {
+            this._oLayoutDialog.close();
+          }
+        },
+        _captureDefaultLayout: function () {
+          var oTreeTable = this.byId("idTreeTable");
+          if (!oTreeTable) {
+            return;
+          }
+
+          this._defaultLayoutColumns = oTreeTable
+            .getColumns()
+            .map(function (oColumn) {
+              return {
+                id: oColumn.getId().split("--").pop(),
+                visible: oColumn.getVisible(),
+              };
+            });
+
+          console.log(
+            "📌 Default layout captured:",
+            this._defaultLayoutColumns,
+          );
+        },
+
+        onDeleteLayout: function (oEvent) {
+          // 1️⃣ Get clicked row
+          var oButton = oEvent.getSource();
+          var oRow = oButton.getParent(); // ColumnListItem
+          var oCtx = oRow.getBindingContext("layoutModel");
+
+          if (!oCtx) {
+            return;
+          }
+
+          // 2️⃣ Get layout data
+          var oLayout = oCtx.getObject();
+          var sLayoutName = oLayout.name;
+
+          var oView = this.getView();
+          var oODataModel = oView.getModel("oModel");
+
+          // 3️⃣ First READ user from backend
+          oODataModel.read("/UserApprovalLevelSet", {
+            success: function (oData) {
+              if (!oData.results || oData.results.length === 0) {
+                sap.m.MessageBox.error("User verification data not found");
+                return;
+              }
+
+              // 🔹 Take first record
+              var sUserName = oData.results[0].UserName;
+
+              // 4️⃣ Confirm delete
+              sap.m.MessageBox.confirm(
+                'Are you sure you want to delete layout "' + sLayoutName + '"?',
+                {
+                  title: "Delete Layout",
+                  actions: [
+                    sap.m.MessageBox.Action.OK,
+                    sap.m.MessageBox.Action.CANCEL,
+                  ],
+                  onClose: function (sAction) {
+                    if (sAction !== sap.m.MessageBox.Action.OK) {
+                      return;
+                    }
+
+                    // 5️⃣ DELETE call with LayoutName + UserName
+                    var sPath =
+                      "/UserLayoutParametersSet(" +
+                      "UserId='" +
+                      encodeURIComponent(sUserName) +
+                      "'," +
+                      "LayoutName='" +
+                      encodeURIComponent(sLayoutName) +
+                      "'" +
+                      ")";
+
+                    oODataModel.remove(sPath, {
+                      success: function () {
+                        // 6️⃣ Update UI model
+                        var oLayoutModel = oView.getModel("layoutModel");
+                        var aLayouts =
+                          oLayoutModel.getProperty("/layouts") || [];
+
+                        oLayoutModel.setProperty(
+                          "/layouts",
+                          aLayouts.filter(function (oItem) {
+                            return oItem.name !== sLayoutName;
+                          }),
+                        );
+
+                        sap.m.MessageToast.show("Layout deleted successfully");
+                      },
+
+                      error: function (oError) {
+                        console.error("Delete failed", oError);
+                        sap.m.MessageToast.show("Failed to delete layout");
+                      },
+                    });
+                  },
+                },
+              );
+            }.bind(this),
+
+            error: function (oError) {
+              sap.m.MessageBox.error("Failed to fetch user data");
+              console.error(oError);
+            },
+          });
+        },
+
+        onTdsAmountChange: function (oEvent) {
+          var oInput = oEvent.getSource();
+          var oContext = oInput.getBindingContext("treeData");
+          var sNewValue = oEvent.getParameter("value");
+
+          // Validate numeric input
+          var fNewValue = parseFloat(sNewValue) || 0;
+          if (fNewValue < 0) {
+            fNewValue = 0;
+            oInput.setValue(fNewValue.toFixed(2));
+            MessageToast.show("TDS Amount cannot be negative");
+            return;
+          }
+
+          // Format to 2 decimal places
+          var sFormattedValue = fNewValue.toFixed(2);
+          oInput.setValue(sFormattedValue);
+
+          // Update the tree data model
+          oContext
+            .getModel()
+            .setProperty(oContext.getPath() + "/TdsAmount", sFormattedValue);
+
+          console.log(
+            "TDS Amount updated in tree data model:",
+            sFormattedValue,
+          );
+          MessageToast.show(
+            "TDS Amount updated to ₹" +
+              fNewValue.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }),
+          );
         },
 
         onPmApprAmountChange: function (oEvent) {
-            var oInput = oEvent.getSource();
-            var oContext = oInput.getBindingContext("treeData");
-            var sNewValue = oEvent.getParameter("value");
+          var oInput = oEvent.getSource();
+          var oContext = oInput.getBindingContext("treeData");
+          var sNewValue = oEvent.getParameter("value");
 
-            // Validate numeric input
-            var fNewValue = parseFloat(sNewValue) || 0;
-            if (fNewValue < 0) {
-                fNewValue = 0;
-                oInput.setValue(fNewValue.toFixed(2));
-                MessageToast.show("PM Approved Amount cannot be negative");
-                return;
-            }
+          // Validate numeric input
+          var fNewValue = parseFloat(sNewValue) || 0;
+          if (fNewValue < 0) {
+            fNewValue = 0;
+            oInput.setValue(fNewValue.toFixed(2));
+            MessageToast.show("PM Approved Amount cannot be negative");
+            return;
+          }
 
-            // Format to 2 decimal places
-            var sFormattedValue = fNewValue.toFixed(2);
-            oInput.setValue(sFormattedValue);
+          // Format to 2 decimal places
+          var sFormattedValue = fNewValue.toFixed(2);
+          oInput.setValue(sFormattedValue);
 
-            // Update the tree data model
-            oContext.getModel().setProperty(oContext.getPath() + "/AudApprAmt", sFormattedValue);
+          // Update the tree data model
+          oContext
+            .getModel()
+            .setProperty(oContext.getPath() + "/AudApprAmt", sFormattedValue);
 
-            console.log("Auditor Approved Amount updated in tree data model:", sFormattedValue);
-            MessageToast.show("Auditor Approved Amount updated to ₹" + fNewValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+          console.log(
+            "Auditor Approved Amount updated in tree data model:",
+            sFormattedValue,
+          );
+          MessageToast.show(
+            "Auditor Approved Amount updated to ₹" +
+              fNewValue.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }),
+          );
         },
 
         onRemarksChange: function (oEvent) {
-            var oInput = oEvent.getSource();
-            var oContext = oInput.getBindingContext("treeData");
-            var sNewValue = oEvent.getParameter("value");
+          var oInput = oEvent.getSource();
+          var oContext = oInput.getBindingContext("treeData");
+          var sNewValue = oEvent.getParameter("value");
 
-            // Update the tree data model
-            oContext.getModel().setProperty(oContext.getPath() + "/AudApprRemarks", sNewValue);
+          // Update the tree data model
+          oContext
+            .getModel()
+            .setProperty(oContext.getPath() + "/AudApprRemarks", sNewValue);
 
-            console.log("Auditor Remarks updated in tree data model:", sNewValue);
+          console.log("Auditor Remarks updated in tree data model:", sNewValue);
         },
 
         _processBulkAction: function (aSelectedItems, sActionType) {
-            console.log("=== _processBulkAction CALLED ===");
-            console.log("Selected Items Count:", aSelectedItems.length);
-            console.log("Action Type:", sActionType);
-            console.log("Selected Items:", aSelectedItems);
+          console.log("=== _processBulkAction CALLED ===");
+          console.log("Selected Items Count:", aSelectedItems.length);
+          console.log("Action Type:", sActionType);
+          console.log("Selected Items:", aSelectedItems);
 
-            var oTreeModel = this.getView().getModel("treeData");
-            var aTreeData = oTreeModel.getData().treeData;
-            var sStatus = sActionType === "APPROVE" ? "APPROVED" : "REJECTED";
-            var sDefaultRemarks = sActionType === "APPROVE" ? "Approved via bulk action" : "Rejected via bulk action";
+          var oTreeModel = this.getView().getModel("treeData");
+          var aTreeData = oTreeModel.getData().treeData;
+          var sStatus = sActionType === "APPROVE" ? "APPROVED" : "REJECTED";
+          var sDefaultRemarks =
+            sActionType === "APPROVE"
+              ? "Approved via bulk action"
+              : "Rejected via bulk action";
 
-            // Prepare payload with all line item details
-            var aPayloadItems = [];
+          // Prepare payload with all line item details
+          var aPayloadItems = [];
 
-            console.log("=== BUILDING PAYLOAD ITEMS ===");
+          console.log("=== BUILDING PAYLOAD ITEMS ===");
 
-            aSelectedItems.forEach(function (oSelectedItem, iIndex) {
-                console.log("Processing selected item " + (iIndex + 1) + ":", oSelectedItem);
+          aSelectedItems.forEach(
+            function (oSelectedItem, iIndex) {
+              console.log(
+                "Processing selected item " + (iIndex + 1) + ":",
+                oSelectedItem,
+              );
 
-                if (!oSelectedItem.isHeader) {
-                    // Individual item selected
-                    console.log("  -> Individual item selected");
-                    var oPayloadItem = this._createPayloadItem(oSelectedItem, sStatus, sDefaultRemarks);
-                    aPayloadItems.push(oPayloadItem);
-                    console.log("  -> Payload item created:", oPayloadItem);
+              if (!oSelectedItem.isHeader) {
+                // Individual item selected
+                console.log("  -> Individual item selected");
+                var oPayloadItem = this._createPayloadItem(
+                  oSelectedItem,
+                  sStatus,
+                  sDefaultRemarks,
+                );
+                aPayloadItems.push(oPayloadItem);
+                console.log("  -> Payload item created:", oPayloadItem);
+              } else {
+                // Header selected - include all its children
+                console.log("  -> Header selected, processing children");
+                var oHeader = this._findHeaderInTreeData(
+                  aTreeData,
+                  oSelectedItem.ApprovalNo,
+                );
+                if (oHeader && oHeader.children) {
+                  console.log(
+                    "  -> Found header with " +
+                      oHeader.children.length +
+                      " children",
+                  );
+                  oHeader.children.forEach(
+                    function (oChildItem, iChildIndex) {
+                      console.log(
+                        "    -> Processing child " + (iChildIndex + 1) + ":",
+                        oChildItem,
+                      );
+                      var oPayloadItem = this._createPayloadItem(
+                        oChildItem,
+                        sStatus,
+                        sDefaultRemarks,
+                      );
+                      aPayloadItems.push(oPayloadItem);
+                      console.log(
+                        "    -> Child payload item created:",
+                        oPayloadItem,
+                      );
+                    }.bind(this),
+                  );
                 } else {
-                    // Header selected - include all its children
-                    console.log("  -> Header selected, processing children");
-                    var oHeader = this._findHeaderInTreeData(aTreeData, oSelectedItem.ApprovalNo);
-                    if (oHeader && oHeader.children) {
-                        console.log("  -> Found header with " + oHeader.children.length + " children");
-                        oHeader.children.forEach(function (oChildItem, iChildIndex) {
-                            console.log("    -> Processing child " + (iChildIndex + 1) + ":", oChildItem);
-                            var oPayloadItem = this._createPayloadItem(oChildItem, sStatus, sDefaultRemarks);
-                            aPayloadItems.push(oPayloadItem);
-                            console.log("    -> Child payload item created:", oPayloadItem);
-                        }.bind(this));
-                    } else {
-                        console.log("  -> No header found or no children");
-                    }
+                  console.log("  -> No header found or no children");
                 }
-            }.bind(this));
+              }
+            }.bind(this),
+          );
 
-            console.log("=== FINAL PAYLOAD ITEMS ===");
-            console.log("Total payload items:", aPayloadItems.length);
-            console.log("Payload items array:", aPayloadItems);
+          console.log("=== FINAL PAYLOAD ITEMS ===");
+          console.log("Total payload items:", aPayloadItems.length);
+          console.log("Payload items array:", aPayloadItems);
 
-            if (aPayloadItems.length === 0) {
-                console.error("❌ NO PAYLOAD ITEMS CREATED!");
-                MessageToast.show("No items to process");
-                return;
-            }
+          if (aPayloadItems.length === 0) {
+            console.error("❌ NO PAYLOAD ITEMS CREATED!");
+            MessageToast.show("No items to process");
+            return;
+          }
 
-            // Send payload to backend
-            console.log("=== CALLING _sendApprovalPayloadToBackend ===");
-            //this._sendApprovalPayloadToBackend(aPayloadItems, sActionType, aSelectedItems);
-            this._sendDeepApprovalPayload(aPayloadItems, sActionType);
+          // Send payload to backend
+          console.log("=== CALLING _sendApprovalPayloadToBackend ===");
+          //this._sendApprovalPayloadToBackend(aPayloadItems, sActionType, aSelectedItems);
+          this._sendDeepApprovalPayload(aPayloadItems, sActionType);
         },
-_sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
-        var oModel = this.getView().getModel("oModel");
+        _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
+          var oModel = this.getView().getModel("oModel");
 
-        if (
-          !oModel ||
-          !Array.isArray(aPayloadItems) ||
-          aPayloadItems.length === 0
-        ) {
-          sap.m.MessageToast.show("No data to send");
-          return;
-        }
+          if (
+            !oModel ||
+            !Array.isArray(aPayloadItems) ||
+            aPayloadItems.length === 0
+          ) {
+            sap.m.MessageToast.show("No data to send");
+            return;
+          }
 
-        /* ================= HELPERS ================= */
+          /* ================= HELPERS ================= */
 
-        var dec = function (v) {
-          return v !== undefined && v !== null && v !== ""
-            ? Number(v).toFixed(2)
-            : "0.00";
-        };
+          var dec = function (v) {
+            return v !== undefined && v !== null && v !== ""
+              ? Number(v).toFixed(2)
+              : "0.00";
+          };
 
-        // SAP Gateway Edm.DateTime (V2)
-        var toEdmDateTime = function (v) {
-          if (!v) return null;
-          var d = new Date(v);
-          return isNaN(d.getTime()) ? null : "/Date(" + d.getTime() + ")/";
-        };
+          // SAP Gateway Edm.DateTime (V2)
+          var toEdmDateTime = function (v) {
+            if (!v) return null;
+            var d = new Date(v);
+            return isNaN(d.getTime()) ? null : "/Date(" + d.getTime() + ")/";
+          };
 
-        /* ================= HEADER ================= */
+          /* ================= HEADER ================= */
 
-        var oFirst = aPayloadItems[0];
-        var sApprovalNo = String(oFirst.ApprovalNo).trim();
-        var sVendorCode = String(
-          oFirst.VendorCode || oFirst.VendorNumber,
-        ).trim();
+          var oFirst = aPayloadItems[0];
+          var sApprovalNo = String(oFirst.ApprovalNo).trim();
+          var sVendorCode = String(
+            oFirst.VendorCode || oFirst.VendorNumber,
+          ).trim();
 
-        var oDeepPayload = {
-          ApprovalNo: sApprovalNo,
-          CreatedOn: null,
-          ProfitCenter: oFirst.ProfitCenter || "",
-          ProfitCenterName: oFirst.ProfitCenterName || "",
-          VendorCode: sVendorCode,
-          VendorName: oFirst.VendorName || "",
-          CompanyCode: oFirst.CompanyCode || "",
-          CreatedBy: "",
-          CreationTime: "PT00H00M00S",
+          var oDeepPayload = {
+            ApprovalNo: sApprovalNo,
+            CreatedOn: null,
+            ProfitCenter: oFirst.ProfitCenter || "",
+            ProfitCenterName: oFirst.ProfitCenterName || "",
+            VendorCode: sVendorCode,
+            VendorName: oFirst.VendorName || "",
+            CompanyCode: oFirst.CompanyCode || "",
+            CreatedBy: "",
+            CreationTime: "PT00H00M00S",
 
-          OverallStatus: "AUD_APPR",
+            OverallStatus: "AUD_APPR",
 
-          GrossAmount: dec(oFirst.GrossAmount),
-          BaseAmount: dec(oFirst.BaseAmount),
-          GSTAmount: dec(oFirst.GSTAmount),
-          TDSAmount: dec(oFirst.TDSAmount),
-          TotalLiability: dec(oFirst.TotalLiability),
-          GST2AReflected: dec(oFirst.GST2AReflected),
-          GST2ANotReflected: dec(oFirst.GST2ANotReflected),
-          AmountClaimed: dec(oFirst.AmountClaimed),
-          ProposedAmount: dec(oFirst.ProposedAmount),
+            GrossAmount: dec(oFirst.GrossAmount),
+            BaseAmount: dec(oFirst.BaseAmount),
+            GSTAmount: dec(oFirst.GSTAmount),
+            TDSAmount: dec(oFirst.TDSAmount),
+            TotalLiability: dec(oFirst.TotalLiability),
+            GST2AReflected: dec(oFirst.GST2AReflected),
+            GST2ANotReflected: dec(oFirst.GST2ANotReflected),
+            AmountClaimed: dec(oFirst.AmountClaimed),
+            ProposedAmount: dec(oFirst.ProposedAmount),
 
-          PMApprovedAmount: dec(oFirst.PMApprovedAmount),
-          HODApprovedAmount: dec(oFirst.HODApprovedAmount),
-          CFOApprovedAmount: dec(oFirst.CFOApprovedAmount),
-          AuditorApprovedAmount: dec(oFirst.AuditorApprovedAmount),
-          DirectorApprovedAmount: dec(oFirst.DirectorApprovedAmount),
+            PMApprovedAmount: dec(oFirst.PMApprovedAmount),
+            HODApprovedAmount: dec(oFirst.HODApprovedAmount),
+            CFOApprovedAmount: dec(oFirst.CFOApprovedAmount),
+            AuditorApprovedAmount: dec(oFirst.AuditorApprovedAmount),
+            DirectorApprovedAmount: dec(oFirst.DirectorApprovedAmount),
 
-          /* ================= ITEMS ================= */
+            /* ================= ITEMS ================= */
 
-          ToItems: {
+           ToItems: {
             results: aPayloadItems.map(function (oItem) {
-              return {
+              var oMappedItem = {
                 ApprovalNo: sApprovalNo,
+                Completed: "X",
                 ProfitCenter: oItem.ProfitCenter || "",
                 TaxNum: oItem.TaxNum || "",
                 ProfitCenterName: oItem.ProfitCenterName || "",
@@ -1668,13 +1842,14 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
                 PmApprOn: toEdmDateTime(oItem.PmApprOn),
                 PmApprRemarks: oItem.PmApprRemarks || "",
 
-               /* ===== HOD ===== */
+                /* ===== HOD ===== */
                 HodApprAmt: dec(oItem.HodApprAmt || "0.00"),
                 HodUserId: oItem.HodUserId || "",
                 HodApprStatus: oItem.HodApprStatus || "",
+
                 HodApprOn: oItem.HodApprOn
-                ? toEdmDateTime(oItem.HodApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.HodApprOn)
+                  : null,
                 HodApprRemarks: oItem.HodApprRemarks || "",
 
                 /* ===== CFO ===== */
@@ -1682,8 +1857,8 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
                 CfoUserId: oItem.CfoUserId || "",
                 CfoApprStatus: oItem.CfoApprStatus || "",
                 CfoApprOn: oItem.CfoApprOn
-                ? toEdmDateTime(oItem.CfoApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.CfoApprOn)
+                  : null,
                 CfoApprRemarks: oItem.CfoApprRemarks || "",
 
                 /* ===== AUDITOR ===== */
@@ -1691,8 +1866,8 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
                 AudUserId: oItem.AudUserId || "",
                 AudApprStatus: oItem.AudApprStatus || "",
                 AudApprOn: oItem.AudApprOn
-                ? toEdmDateTime(oItem.AudApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.AudApprOn)
+                  : null,
                 AudApprRemarks: oItem.AudApprRemarks || "",
 
                 /* ===== DIRECTOR ===== */
@@ -1700,1483 +1875,2064 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
                 DirUserId: oItem.DirUserId || "",
                 DirApprStatus: oItem.DirApprStatus || "",
                 DirApprOn: oItem.DirApprOn
-                ? toEdmDateTime(oItem.DirApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.DirApprOn)
+                  : null,
                 DirApprRemarks: oItem.DirApprRemarks || "",
 
-
                 ModeOfPayment: "",
-                UtrNo: "",
-                PaidAmount1: "0.00",
-                PaymentDate1: null,
-                PaidAmount2: "0.00",
-                PaymentDate2: null,
-                TotalBalOut: "0.00",
                 BalancePayable: "0.00",
+                TotalBalOut: dec(oItem.TotalBalOut || "0.00"),
+                RejectionIndicator: "",
+                RejectedBy: "",
+                RejectionDate: null,
+                RejectorDesignation: "",
               };
+
+              /* ================= REJECTION FIELDS (ONLY IF REJECT) ================= */
+
+              if (sActionType === "REJECT") {
+                oMappedItem.RejectionIndicator = "X";
+                oMappedItem.RejectedBy = oItem.CfoUserId || "";
+                oMappedItem.RejectionDate = toEdmDateTime(new Date());
+                oMappedItem.RejectorDesignation = "CFO";
+              }
+
+              return oMappedItem;
             }),
           },
-        };
+          };
 
-        console.log("🚀 FINAL DEEP CREATE PAYLOAD (MATCHED)");
-        console.log(JSON.stringify(oDeepPayload, null, 2));
+          console.log("🚀 FINAL DEEP CREATE PAYLOAD (MATCHED)");
+          console.log(JSON.stringify(oDeepPayload, null, 2));
 
-        sap.ui.core.BusyIndicator.show(0);
+          sap.ui.core.BusyIndicator.show(0);
 
-        oModel.create("/PaymentHeaderSet", oDeepPayload, {
-          success: function () {
-            sap.ui.core.BusyIndicator.hide();
-            sap.m.MessageToast.show("Submitted successfully");
-          },
-          error: function (oError) {
-            sap.ui.core.BusyIndicator.hide();
-            console.error("❌ Deep create failed", oError);
-            sap.m.MessageBox.error("Backend update failed");
-          },
-        });
-      },
-
-      _createPayloadItem: function (oItem, sStatus, sDefaultRemarks) {
-        console.log("=== _createPayloadItem CALLED ===");
-        console.log("Input Item:", oItem);
-        console.log("Status:", sStatus);
-        console.log("Default Remarks:", sDefaultRemarks);
-
-        var sCurrentUser = this._getCurrentUserId();
-
-        // Ensure required key fields are properly formatted
-        var sApprovalNo = (oItem.ApprovalNo || "").toString().trim();
-        var sVendorCode = (oItem.VendorCode || oItem.VendorNumber || "")
-          .toString()
-          .trim();
-
-        console.log("Key Fields Check:");
-        console.log("  ApprovalNo:", sApprovalNo);
-        console.log("  VendorCode:", sVendorCode);
-        console.log("  Current User:", sCurrentUser);
-
-        if (!sApprovalNo || !sVendorCode) {
-          console.warn("❌ Missing required key fields for payload item:", {
-            ApprovalNo: sApprovalNo,
-            VendorCode: sVendorCode,
-            Item: oItem,
+          oModel.create("/PaymentHeaderSet", oDeepPayload, {
+            success: function () {
+              sap.ui.core.BusyIndicator.hide();
+              sap.m.MessageToast.show("Submitted successfully");
+              // Refresh data after approval
+            this._loadPaymentData()
+            }.bind(this),
+            error: function (oError) {
+              sap.ui.core.BusyIndicator.hide();
+              console.error("❌ Deep create failed", oError);
+              sap.m.MessageBox.error("Backend update failed");
+            },
           });
-        }
+        },
 
-        var oPayloadItem = {
-          // Key fields (required for OData operations)
-          ApprovalNo: sApprovalNo,
-          VendorCode: sVendorCode,
-          VendorNumber: sVendorCode, // Alias for compatibility
-          ProfitCenterName: (oItem.ProfitCenterName || "").toString(),
-          ProfitCenter: (oItem.ProfitCenter || "").toString(),
-          // Other fields
-          ItemNum: (oItem.ItemNum || "").toString(),
-          VendorName: (oItem.VendorName || "").toString(),
-          DocNum: (oItem.DocNum || "").toString(),
-          LiabHead: (oItem.LiabHead || "").toString(),
-          PurchDoc: (oItem.PurchDoc || "").toString(),
-          DocDate: oItem.DocDate,
-          PostingDt: oItem.PostingDt,
-          BaseAmt: parseFloat(oItem.BaseAmt || 0).toString(),
-          GstAmt: parseFloat(oItem.GstAmt || 0).toString(),
-          TdsAmount: parseFloat(oItem.TdsAmount || 0).toString(),
-          TotalLiability: parseFloat(oItem.TotalLiability || 0).toString(),
-          AmtClaimed: parseFloat(oItem.AmtClaimed || 0).toString(),
-          PmApprAmt: parseFloat(oItem.PmApprAmt || 0).toString(),
-          CfoApprAmt: parseFloat(oItem.CfoApprAmt || 0).toString(),
-          AudApprAmt: parseFloat(oItem.AudApprAmt || 0).toString(),
+        _createPayloadItem: function (oItem, sStatus, sDefaultRemarks) {
+          console.log("=== _createPayloadItem CALLED ===");
+          console.log("Input Item:", oItem);
+          console.log("Status:", sStatus);
+          console.log("Default Remarks:", sDefaultRemarks);
 
-          DirApprAmt: parseFloat(oItem.DirApprAmt || 0).toString(),
-          PmApprStatus: sStatus,
-          PmApprRemarks: (
-            oItem.PmApprRemarks ||
-            sDefaultRemarks ||
-            ""
-          ).toString(),
-          PmApprOn: new Date().toISOString(),
-          PmUserId: sCurrentUser,
-          Currency: (oItem.Currency || "INR").toString(),
-          AccountNumber: (oItem.AccountNumber || "").toString(),
-          BankName: (oItem.BankName || "").toString(),
-          CfoApprRemarks: (
-            oItem.CfoApprRemarks ||
-            oItem.CfoApprRemarks ||
-            sDefaultRemarks ||
-            ""
-          ).toString(),
-           AudApprRemarks: (
-            oItem.AudApprRemarks ||
-            oItem.AudApprRemarks ||
-            sDefaultRemarks ||
-            ""
-          ).toString(),
-           DirApprRemarksApprRemarks: (
-            oItem.DirApprRemarks ||
-            oItem.DirApprRemarks ||
-            sDefaultRemarks ||
-            ""
-          ).toString(),
-          // Include other fields with safe defaults
-        
+          var sUserId = this.getView()
+            .getModel("localUser")
+            .getProperty("/UserName");
+
+          var sCurrentUser = sUserId
+            ? sUserId.toString().trim()
+            : "UNKNOWN_USER";
+          // Ensure required key fields are properly formatted
+          var sApprovalNo = (oItem.ApprovalNo || "").toString().trim();
+          var sVendorCode = (oItem.VendorCode || oItem.VendorNumber || "")
+            .toString()
+            .trim();
+
+          console.log("Key Fields Check:");
+          console.log("  ApprovalNo:", sApprovalNo);
+          console.log("  VendorCode:", sVendorCode);
+          console.log("  Current User:", sCurrentUser);
+
+          if (!sApprovalNo || !sVendorCode) {
+            console.warn("❌ Missing required key fields for payload item:", {
+              ApprovalNo: sApprovalNo,
+              VendorCode: sVendorCode,
+              Item: oItem,
+            });
+          }
+
+          var oPayloadItem = {
+            // Key fields (required for OData operations)
+            ApprovalNo: sApprovalNo,
+            Completed: "X",
+            VendorCode: sVendorCode,
+            VendorNumber: sVendorCode, // Alias for compatibility
+            ProfitCenterName: (oItem.ProfitCenterName || "").toString(),
+            ProfitCenter: (oItem.ProfitCenter || "").toString(),
+            // Other fields
+            ItemNum: (oItem.ItemNum || "").toString(),
+            VendorName: (oItem.VendorName || "").toString(),
+            DocNum: (oItem.DocNum || "").toString(),
+            LiabHead: (oItem.LiabHead || "").toString(),
+            PurchDoc: (oItem.PurchDoc || "").toString(),
+            DocDate: oItem.DocDate,
+            PostingDt: oItem.PostingDt,
+            BaseAmt: parseFloat(oItem.BaseAmt || 0).toString(),
+            GstAmt: parseFloat(oItem.GstAmt || 0).toString(),
+            TdsAmount: parseFloat(oItem.TdsAmount || 0).toString(),
+            TotalLiability: parseFloat(oItem.TotalLiability || 0).toString(),
+            AmtClaimed: parseFloat(oItem.AmtClaimed || 0).toString(),
+            PmApprAmt: parseFloat(oItem.PmApprAmt || 0).toString(),
+            CfoApprAmt: parseFloat(oItem.CfoApprAmt || 0).toString(),
+            AudApprAmt: parseFloat(oItem.AudApprAmt || 0).toString(),
+
+            DirApprAmt: parseFloat(oItem.DirApprAmt || 0).toString(),
+            PmApprStatus: sStatus,
+            HodApprStatus: sStatus,
+            CfoApprStatus: sStatus,
             AudApprStatus: sStatus,
 
-          TaxNum: (oItem.TaxNum || "").toString(),
-          BankKey: (oItem.BankKey || "").toString(),
-          ReferenceDoc: (oItem.ReferenceDoc || "").toString(),
-          Gst2aRef: parseFloat(oItem.Gst2aRef || 0).toString(),
-          Gst2aNref: parseFloat(oItem.Gst2aNref || 0).toString(),
-          AprnoRef: (oItem.AprnoRef || "").toString(),
-          Gstr1Details: (oItem.Gstr1Details || "").toString(),
-          Remark: (oItem.Remark || "").toString(),
-          AccountHolder: (oItem.AccountHolder || "").toString(),
-          Branch: (oItem.Branch || "").toString(),
-        };
+            PmApprRemarks: (
+              oItem.PmApprRemarks ||
+              sDefaultRemarks ||
+              ""
+            ).toString(),
 
-        console.log("=== COMPLETE PAYLOAD ITEM CREATED ===");
-        console.log("Payload Item Details:");
-        console.log("  ApprovalNo:", oPayloadItem.ApprovalNo);
-        console.log("  VendorCode:", oPayloadItem.VendorCode);
-        console.log("  ItemNum:", oPayloadItem.ItemNum);
-        console.log("  VendorName:", oPayloadItem.VendorName);
-        console.log("  DocNum:", oPayloadItem.DocNum);
-        console.log("  LiabHead:", oPayloadItem.LiabHead);
-        console.log("  PurchDoc:", oPayloadItem.PurchDoc);
-        console.log("  DocDate:", oPayloadItem.DocDate);
-        console.log("  PostingDt:", oPayloadItem.PostingDt);
-        console.log("  BaseAmt:", oPayloadItem.BaseAmt);
-        console.log("  GstAmt:", oPayloadItem.GstAmt);
-        console.log("  TdsAmount:", oPayloadItem.TdsAmount);
-        console.log("  TotalLiability:", oPayloadItem.TotalLiability);
-        console.log("  AmtClaimed:", oPayloadItem.AmtClaimed);
-        console.log("  PmApprAmt:", oPayloadItem.PmApprAmt);
-        console.log("  PmApprStatus:", oPayloadItem.PmApprStatus);
-        console.log("  PmApprRemarks:", oPayloadItem.PmApprRemarks);
-        console.log("  PmApprOn:", oPayloadItem.PmApprOn);
-        console.log("  PmUserId:", oPayloadItem.PmUserId);
-        console.log("  Currency:", oPayloadItem.Currency);
-        console.log("  AccountNumber:", oPayloadItem.AccountNumber);
-        console.log("  BankName:", oPayloadItem.BankName);
-        console.log("  TaxNum:", oPayloadItem.TaxNum);
-        console.log("  BankKey:", oPayloadItem.BankKey);
-        console.log("  ReferenceDoc:", oPayloadItem.ReferenceDoc);
-        console.log("  Gst2aRef:", oPayloadItem.Gst2aRef);
-        console.log("  Gst2aNref:", oPayloadItem.Gst2aNref);
-        console.log("  AprnoRef:", oPayloadItem.AprnoRef);
-        console.log("  Gstr1Details:", oPayloadItem.Gstr1Details);
-        console.log("  Remark:", oPayloadItem.Remark);
-        console.log("  AccountHolder:", oPayloadItem.AccountHolder);
-        console.log("  Branch:", oPayloadItem.Branch);
-        console.log("=== FULL PAYLOAD ITEM (JSON) ===");
-        console.log(JSON.stringify(oPayloadItem, null, 2));
-        console.log("=== USER REQUESTED PAYLOAD FORMAT ===");
-        console.log("ItemNum:", oPayloadItem.ItemNum);
-        console.log("VendorName:", oPayloadItem.VendorName);
-        console.log("DocNum:", oPayloadItem.DocNum);
-        console.log("LiabHead:", oPayloadItem.LiabHead);
-        console.log("PurchDoc:", oPayloadItem.PurchDoc);
-        console.log("DocDate:", oPayloadItem.DocDate);
-        console.log("PostingDt:", oPayloadItem.PostingDt);
-        console.log("BaseAmt:", oPayloadItem.BaseAmt);
-        console.log("GstAmt:", oPayloadItem.GstAmt);
-        console.log("TdsAmount:", oPayloadItem.TdsAmount);
-        console.log("TotalLiability:", oPayloadItem.TotalLiability);
-        console.log("AmtClaimed:", oPayloadItem.AmtClaimed);
-        console.log("PmApprAmt:", oPayloadItem.PmApprAmt);
-        console.log("PmApprStatus:", oPayloadItem.PmApprStatus);
-        console.log("PmApprRemarks:", oPayloadItem.PmApprRemarks);
-        console.log("PmApprOn:", oPayloadItem.PmApprOn);
-        console.log("PmUserId:", oPayloadItem.PmUserId);
-        console.log("Currency:", oPayloadItem.Currency);
-        console.log("AccountNumber:", oPayloadItem.AccountNumber);
-        console.log("BankName:", oPayloadItem.BankName);
-        console.log("TaxNum:", oPayloadItem.TaxNum);
-        console.log("BankKey:", oPayloadItem.BankKey);
-        console.log("ReferenceDoc:", oPayloadItem.ReferenceDoc);
-        console.log("Gst2aRef:", oPayloadItem.Gst2aRef);
-        console.log("Gst2aNref:", oPayloadItem.Gst2aNref);
-        console.log("AprnoRef:", oPayloadItem.AprnoRef);
-        console.log("Gstr1Details:", oPayloadItem.Gstr1Details);
-        console.log("Remark:", oPayloadItem.Remark);
-        console.log("AccountHolder:", oPayloadItem.AccountHolder);
-        console.log("Branch:", oPayloadItem.Branch);
-        console.log("===============================");
+            PmApprOn: new Date().toISOString(),
+            HodApprOn: new Date().toISOString(),
+            CfoApprOn: new Date().toISOString(),
+            AudApprOn: new Date().toISOString(),
+            PmUserId: sCurrentUser,
+            HodUserId: sCurrentUser,
+            CfoUserId: sCurrentUser,
+            AudUserId: sCurrentUser,
+            Currency: (oItem.Currency || "INR").toString(),
+            AccountNumber: (oItem.AccountNumber || "").toString(),
+            BankName: (oItem.BankName || "").toString(),
+            CfoApprRemarks: (
+              oItem.CfoApprRemarks ||
+              oItem.CfoApprRemarks ||
+              sDefaultRemarks ||
+              ""
+            ).toString(),
+            AudApprRemarks: (
+              oItem.AudApprRemarks ||
+              oItem.AudApprRemarks ||
+              sDefaultRemarks ||
+              ""
+            ).toString(),
 
-        return oPayloadItem;
-      },
+            // Include other fields with safe defaults
+
+            TaxNum: (oItem.TaxNum || "").toString(),
+            BankKey: (oItem.BankKey || "").toString(),
+            ReferenceDoc: (oItem.ReferenceDoc || "").toString(),
+            Gst2aRef: parseFloat(oItem.Gst2aRef || 0).toString(),
+            Gst2aNref: parseFloat(oItem.Gst2aNref || 0).toString(),
+            AprnoRef: (oItem.AprnoRef || "").toString(),
+            Gstr1Details: (oItem.Gstr1Details || "").toString(),
+            Remark: (oItem.Remark || "").toString(),
+            AccountHolder: (oItem.AccountHolder || "").toString(),
+            Branch: (oItem.Branch || "").toString(),
+          };
+
+          return oPayloadItem;
+        },
         _getCurrentUserId: function () {
-            // Try to get current user from various sources
-            try {
-                // Option 1: From shell service (if available)
-                if (sap.ushell && sap.ushell.Container) {
-                    var oUser = sap.ushell.Container.getService("UserInfo").getUser();
-                    if (oUser && oUser.getId) {
-                        return oUser.getId();
-                    }
-                }
-
-                // Option 2: From OData model user context (if available)
-                var oModel = this.getView().getModel("oModel");
-                if (oModel && oModel.getCurrentUser) {
-                    return oModel.getCurrentUser();
-                }
-
-                // Option 3: Default fallback
-                return "CURRENT_USER";
-            } catch (e) {
-                console.log("Could not determine current user, using default");
-                return "CURRENT_USER";
+          // Try to get current user from various sources
+          try {
+            // Option 1: From shell service (if available)
+            if (sap.ushell && sap.ushell.Container) {
+              var oUser = sap.ushell.Container.getService("UserInfo").getUser();
+              if (oUser && oUser.getId) {
+                return oUser.getId();
+              }
             }
+
+            // Option 2: From OData model user context (if available)
+            var oModel = this.getView().getModel("oModel");
+            if (oModel && oModel.getCurrentUser) {
+              return oModel.getCurrentUser();
+            }
+
+            // Option 3: Default fallback
+            return "CURRENT_USER";
+          } catch (e) {
+            console.log("Could not determine current user, using default");
+            return "CURRENT_USER";
+          }
         },
 
         _checkAvailableEntitySets: function () {
-            var oModel = this.getView().getModel("oModel");
-            var oMetadata = oModel.getServiceMetadata();
+          var oModel = this.getView().getModel("oModel");
+          var oMetadata = oModel.getServiceMetadata();
 
-            console.log("=== AVAILABLE ENTITY SETS ===");
+          console.log("=== AVAILABLE ENTITY SETS ===");
 
-            if (oMetadata && oMetadata.dataServices && oMetadata.dataServices.schema) {
-                oMetadata.dataServices.schema.forEach(function (oSchema) {
-                    if (oSchema.entityContainer && oSchema.entityContainer[0] && oSchema.entityContainer[0].entitySet) {
-                        console.log("Entity Sets found:");
-                        oSchema.entityContainer[0].entitySet.forEach(function (oEntitySet) {
-                            console.log("  - " + oEntitySet.name + " (Type: " + oEntitySet.entityType + ")");
-                        });
-                    }
-                });
-            } else {
-                console.log("No metadata available or metadata structure unexpected");
-            }
+          if (
+            oMetadata &&
+            oMetadata.dataServices &&
+            oMetadata.dataServices.schema
+          ) {
+            oMetadata.dataServices.schema.forEach(function (oSchema) {
+              if (
+                oSchema.entityContainer &&
+                oSchema.entityContainer[0] &&
+                oSchema.entityContainer[0].entitySet
+              ) {
+                console.log("Entity Sets found:");
+                oSchema.entityContainer[0].entitySet.forEach(
+                  function (oEntitySet) {
+                    console.log(
+                      "  - " +
+                        oEntitySet.name +
+                        " (Type: " +
+                        oEntitySet.entityType +
+                        ")",
+                    );
+                  },
+                );
+              }
+            });
+          } else {
+            console.log(
+              "No metadata available or metadata structure unexpected",
+            );
+          }
 
-            console.log("===============================");
+          console.log("===============================");
         },
 
         // Debug method to check data structure
         _debugDataStructure: function () {
-            var oTreeModel = this.getView().getModel("treeData");
-            var aTreeData = oTreeModel.getData().treeData;
+          var oTreeModel = this.getView().getModel("treeData");
+          var aTreeData = oTreeModel.getData().treeData;
 
-            console.log("=== DATA STRUCTURE DEBUG ===");
-            console.log("Tree Data Count:", aTreeData.length);
+          console.log("=== DATA STRUCTURE DEBUG ===");
+          console.log("Tree Data Count:", aTreeData.length);
 
-            if (aTreeData.length > 0) {
-                var oFirstHeader = aTreeData[0];
-                console.log("First Header:", {
-                    ApprovalNo: oFirstHeader.ApprovalNo,
-                    VendorCode: oFirstHeader.VendorCode,
-                    VendorName: oFirstHeader.VendorName,
-                    ChildrenCount: oFirstHeader.children ? oFirstHeader.children.length : 0
-                });
+          if (aTreeData.length > 0) {
+            var oFirstHeader = aTreeData[0];
+            console.log("First Header:", {
+              ApprovalNo: oFirstHeader.ApprovalNo,
+              VendorCode: oFirstHeader.VendorCode,
+              VendorName: oFirstHeader.VendorName,
+              ChildrenCount: oFirstHeader.children
+                ? oFirstHeader.children.length
+                : 0,
+            });
 
-                if (oFirstHeader.children && oFirstHeader.children.length > 0) {
-                    var oFirstChild = oFirstHeader.children[0];
-                    console.log("First Child Item:", {
-                        ApprovalNo: oFirstChild.ApprovalNo,
-                        VendorCode: oFirstChild.VendorCode,
-                        VendorNumber: oFirstChild.VendorNumber,
-                        VendorName: oFirstChild.VendorName,
-                        ItemNum: oFirstChild.ItemNum,
-                        AllKeys: Object.keys(oFirstChild).filter(key => key.toLowerCase().includes('vendor'))
-                    });
-                }
+            if (oFirstHeader.children && oFirstHeader.children.length > 0) {
+              var oFirstChild = oFirstHeader.children[0];
+              console.log("First Child Item:", {
+                ApprovalNo: oFirstChild.ApprovalNo,
+                VendorCode: oFirstChild.VendorCode,
+                VendorNumber: oFirstChild.VendorNumber,
+                VendorName: oFirstChild.VendorName,
+                ItemNum: oFirstChild.ItemNum,
+                AllKeys: Object.keys(oFirstChild).filter((key) =>
+                  key.toLowerCase().includes("vendor"),
+                ),
+              });
             }
-            console.log("============================");
+          }
+          console.log("============================");
         },
 
         // Comprehensive debug function to trace the entire approval flow
         debugApprovalFlow: function () {
-            console.log("=== COMPREHENSIVE APPROVAL FLOW DEBUG ===");
+          console.log("=== COMPREHENSIVE APPROVAL FLOW DEBUG ===");
 
-            // 1. Check if OData model is available
-            var oModel = this.getView().getModel("oModel");
-            console.log("1. OData Model Available:", !!oModel);
-            if (oModel) {
-                console.log("   Service URL:", oModel.sServiceUrl);
-                console.log("   Metadata Loaded:", !!oModel.getServiceMetadata());
-            }
+          // 1. Check if OData model is available
+          var oModel = this.getView().getModel("oModel");
+          console.log("1. OData Model Available:", !!oModel);
+          if (oModel) {
+            console.log("   Service URL:", oModel.sServiceUrl);
+            console.log("   Metadata Loaded:", !!oModel.getServiceMetadata());
+          }
 
-            // 2. Check table selection
-            var oTable = this.byId("idPaymentTable");
-            var aSelectedItems = oTable ? oTable.getSelectedItems() : [];
-            console.log("2. Table Selection:");
-            console.log("   Table Available:", !!oTable);
-            console.log("   Selected Items:", aSelectedItems.length);
+          // 2. Check table selection
+          var oTable = this.byId("idPaymentTable");
+          var aSelectedItems = oTable ? oTable.getSelectedItems() : [];
+          console.log("2. Table Selection:");
+          console.log("   Table Available:", !!oTable);
+          console.log("   Selected Items:", aSelectedItems.length);
 
-            // 3. Test data availability
-            if (oModel) {
-                console.log("3. Testing Data Availability:");
-                oModel.read("/PaymentItemSet", {
-                    urlParameters: {
-                        "$top": "1"
-                    },
-                    success: function (oData) {
-                        console.log("   Data Available:", oData.results && oData.results.length > 0);
-                        if (oData.results && oData.results.length > 0) {
-                            console.log("   Sample Item:", oData.results[0]);
+          // 3. Test data availability
+          if (oModel) {
+            console.log("3. Testing Data Availability:");
+            oModel.read("/PaymentItemSet", {
+              urlParameters: {
+                $top: "1",
+              },
+              success: function (oData) {
+                console.log(
+                  "   Data Available:",
+                  oData.results && oData.results.length > 0,
+                );
+                if (oData.results && oData.results.length > 0) {
+                  console.log("   Sample Item:", oData.results[0]);
 
-                            // Test payload creation
-                            var oPayload = this._createPayloadItem(oData.results[0], "APPROVED", "Test");
-                            console.log("   Payload Creation Success:", !!oPayload);
-                            console.log("   Key Fields Valid:", !!(oPayload.ApprovalNo && oPayload.VendorCode));
-                        }
-                    }.bind(this),
-                    error: function (oError) {
-                        console.error("   Data Load Failed:", oError);
-                    }
-                });
-            }
+                  // Test payload creation
+                  var oPayload = this._createPayloadItem(
+                    oData.results[0],
+                    "APPROVED",
+                    "Test",
+                  );
+                  console.log("   Payload Creation Success:", !!oPayload);
+                  console.log(
+                    "   Key Fields Valid:",
+                    !!(oPayload.ApprovalNo && oPayload.VendorCode),
+                  );
+                }
+              }.bind(this),
+              error: function (oError) {
+                console.error("   Data Load Failed:", oError);
+              },
+            });
+          }
 
-            // 4. Check dialog state
-            console.log("4. Dialog State:");
-            console.log("   Dialog Created:", !!this._oApprovalDialog);
-            console.log("   Stored Selected Items:", this._aDialogSelectedItems ? this._aDialogSelectedItems.length : 0);
-            console.log("   Stored Action Type:", this._sDialogActionType);
+          // 4. Check dialog state
+          console.log("4. Dialog State:");
+          console.log("   Dialog Created:", !!this._oApprovalDialog);
+          console.log(
+            "   Stored Selected Items:",
+            this._aDialogSelectedItems ? this._aDialogSelectedItems.length : 0,
+          );
+          console.log("   Stored Action Type:", this._sDialogActionType);
 
-            console.log("==========================================");
+          console.log("==========================================");
 
-            return {
-                modelAvailable: !!oModel,
-                tableAvailable: !!oTable,
-                selectedCount: aSelectedItems.length,
-                dialogCreated: !!this._oApprovalDialog
-            };
+          return {
+            modelAvailable: !!oModel,
+            tableAvailable: !!oTable,
+            selectedCount: aSelectedItems.length,
+            dialogCreated: !!this._oApprovalDialog,
+          };
         },
 
         _findHeaderInTreeData: function (aTreeData, sApprovalNo) {
-            return aTreeData.find(function (oHeader) {
-                return oHeader.ApprovalNo === sApprovalNo && oHeader.isHeader;
-            });
+          return aTreeData.find(function (oHeader) {
+            return oHeader.ApprovalNo === sApprovalNo && oHeader.isHeader;
+          });
         },
 
-        _sendApprovalPayloadToBackend: function (aPayloadItems, sActionType, aSelectedItems) {
-            console.log("=== _sendApprovalPayloadToBackend CALLED ===");
-            console.log("Payload Items Count:", aPayloadItems.length);
-            console.log("Action Type:", sActionType);
-            console.log("Selected Items Count:", aSelectedItems.length);
+        _sendApprovalPayloadToBackend: function (
+          aPayloadItems,
+          sActionType,
+          aSelectedItems,
+        ) {
+          console.log("=== _sendApprovalPayloadToBackend CALLED ===");
+          console.log("Payload Items Count:", aPayloadItems.length);
+          console.log("Action Type:", sActionType);
+          console.log("Selected Items Count:", aSelectedItems.length);
 
-            var oModel = this.getView().getModel("oModel");
+          var oModel = this.getView().getModel("oModel");
 
-            if (!oModel) {
-                console.error("❌ OData model 'oModel' not available!");
-                MessageToast.show("OData model not available");
-                return;
-            }
+          if (!oModel) {
+            console.error("❌ OData model 'oModel' not available!");
+            MessageToast.show("OData model not available");
+            return;
+          }
 
-            console.log("✅ OData model found:", oModel);
-            console.log("Service URL:", oModel.sServiceUrl);
+          console.log("✅ OData model found:", oModel);
+          console.log("Service URL:", oModel.sServiceUrl);
 
-            console.log("=== COMPLETE PAYLOAD DETAILS ===");
-            console.log("Service:", "ZPAYMENT_APPROVAL_SRV");
-            console.log("Action:", sActionType);
-            console.log("Selected Items:", aPayloadItems.length);
-            console.log("=== PAYLOAD ITEMS (DETAILED) ===");
-            aPayloadItems.forEach(function (oItem, iIndex) {
-                console.log("Item " + (iIndex + 1) + ":");
-                console.log("  ApprovalNo:", oItem.ApprovalNo);
-                console.log("  VendorCode:", oItem.VendorCode);
-                console.log("  PmApprStatus:", oItem.PmApprStatus);
-                console.log("  PmApprRemarks:", oItem.PmApprRemarks);
-                console.log("  PmApprAmt:", oItem.PmApprAmt);
-                console.log("  TdsAmount:", oItem.TdsAmount);
-                console.log("  Full Item:", oItem);
-                console.log("  ---");
-            });
-            console.log("=======================================");
+          console.log("=== COMPLETE PAYLOAD DETAILS ===");
+          console.log("Service:", "ZPAYMENT_APPROVAL_SRV");
+          console.log("Action:", sActionType);
+          console.log("Selected Items:", aPayloadItems.length);
+          console.log("=== PAYLOAD ITEMS (DETAILED) ===");
+          aPayloadItems.forEach(function (oItem, iIndex) {
+            console.log("Item " + (iIndex + 1) + ":");
+            console.log("  ApprovalNo:", oItem.ApprovalNo);
+            console.log("  VendorCode:", oItem.VendorCode);
+            console.log("  PmApprStatus:", oItem.PmApprStatus);
+            console.log("  PmApprRemarks:", oItem.PmApprRemarks);
+            console.log("  PmApprAmt:", oItem.PmApprAmt);
+            console.log("  TdsAmount:", oItem.TdsAmount);
+            console.log("  Full Item:", oItem);
+            console.log("  ---");
+          });
+          console.log("=======================================");
 
-            // Send PUT requests for selected items
-            console.log("=== CALLING _processBatchUpdate ===");
-            console.log("=== CALLING DEEP CREATE (SINGLE REQUEST) ===");
-            this._sendDeepCreate(oModel, aPayloadItems, sActionType);
+          // Send PUT requests for selected items
+          console.log("=== CALLING _processBatchUpdate ===");
+          console.log("=== CALLING DEEP CREATE (SINGLE REQUEST) ===");
+          this._sendDeepCreate(oModel, aPayloadItems, sActionType);
 
-            //this._processBatchUpdate(oModel, aPayloadItems, sActionType, aSelectedItems);
+          //this._processBatchUpdate(oModel, aPayloadItems, sActionType, aSelectedItems);
         },
         _sendDeepCreate: function (oModel, aPayloadItems, sActionType) {
-    sap.ui.core.BusyIndicator.show(0);
+          sap.ui.core.BusyIndicator.show(0);
 
-    // Build ONE header with ALL items
-    var oPayload = {
-        ApprovalNo: aPayloadItems[0].ApprovalNo,
-        VendorCode: aPayloadItems[0].VendorCode,
-        OverallStatus: sActionType,
+          // Build ONE header with ALL items
+          var oPayload = {
+            ApprovalNo: aPayloadItems[0].ApprovalNo,
+            VendorCode: aPayloadItems[0].VendorCode,
+            OverallStatus: sActionType,
 
-        ToItems: {
-            results: aPayloadItems.map(function (item) {
-                return {
+            ToItems: {
+              results: aPayloadItems.map(
+                function (item) {
+                  return {
                     ApprovalNo: item.ApprovalNo,
                     VendorCode: item.VendorCode,
                     ItemNum: item.ItemNum,
 
                     // 🔴 DATE FIX (IMPORTANT)
-                    DocDate: item.DocDate ? this._toABAPDate(item.DocDate) : null,
-                    PostingDt: item.PostingDt ? this._toABAPDate(item.PostingDt) : null,
+                    DocDate: item.DocDate
+                      ? this._toABAPDate(item.DocDate)
+                      : null,
+                    PostingDt: item.PostingDt
+                      ? this._toABAPDate(item.PostingDt)
+                      : null,
                     PmApprOn: this._toABAPDateTime(new Date()),
 
                     PmApprAmt: item.PmApprAmt,
                     PmApprStatus: item.PmApprStatus,
                     PmApprRemarks: item.PmApprRemarks,
-                    TdsAmount: item.TdsAmount
-                };
-            }.bind(this))
-        }
-    };
-    console.log("🚀 SENDING DEEP CREATE PAYLOAD:", oPayload);
+                    TdsAmount: item.TdsAmount,
+                  };
+                }.bind(this),
+              ),
+            },
+          };
+          console.log("🚀 SENDING DEEP CREATE PAYLOAD:", oPayload);
 
-    oModel.create("/PaymentHeaderSet", oPayload, {
-        success: function () {
-            sap.ui.core.BusyIndicator.hide();
-            MessageToast.show("Deep create successful");
+          oModel.create("/PaymentHeaderSet", oPayload, {
+            success: function () {
+              sap.ui.core.BusyIndicator.hide();
+              MessageToast.show("Deep create successful");
+            },
+            error: function (oError) {
+              sap.ui.core.BusyIndicator.hide();
+              console.error("Deep create failed", oError);
+            },
+          });
         },
-        error: function (oError) {
-            sap.ui.core.BusyIndicator.hide();
-            console.error("Deep create failed", oError);
-        }
-    });
-},
-_toABAPDate: function (jsDate) {
-    var d = new Date(jsDate);
-    return (
-        d.getFullYear().toString().padStart(4, "0") +
-        (d.getMonth() + 1).toString().padStart(2, "0") +
-        d.getDate().toString().padStart(2, "0")
-    );
-},
+        _toABAPDate: function (jsDate) {
+          var d = new Date(jsDate);
+          return (
+            d.getFullYear().toString().padStart(4, "0") +
+            (d.getMonth() + 1).toString().padStart(2, "0") +
+            d.getDate().toString().padStart(2, "0")
+          );
+        },
 
-_toABAPDateTime: function (jsDate) {
-    var d = new Date(jsDate);
-    return (
-        d.getFullYear().toString().padStart(4, "0") +
-        (d.getMonth() + 1).toString().padStart(2, "0") +
-        d.getDate().toString().padStart(2, "0") +
-        d.getHours().toString().padStart(2, "0") +
-        d.getMinutes().toString().padStart(2, "0") +
-        d.getSeconds().toString().padStart(2, "0")
-    );
-}
-,
-
+        _toABAPDateTime: function (jsDate) {
+          var d = new Date(jsDate);
+          return (
+            d.getFullYear().toString().padStart(4, "0") +
+            (d.getMonth() + 1).toString().padStart(2, "0") +
+            d.getDate().toString().padStart(2, "0") +
+            d.getHours().toString().padStart(2, "0") +
+            d.getMinutes().toString().padStart(2, "0") +
+            d.getSeconds().toString().padStart(2, "0")
+          );
+        },
         _checkServiceCapabilities: function (oModel) {
-            var oMetadata = oModel.getServiceMetadata();
+          var oMetadata = oModel.getServiceMetadata();
 
-            console.log("=== SERVICE CAPABILITIES CHECK ===");
+          console.log("=== SERVICE CAPABILITIES CHECK ===");
 
-            if (!oMetadata) {
-                console.log("No metadata available");
-                return;
-            }
+          if (!oMetadata) {
+            console.log("No metadata available");
+            return;
+          }
 
-            // Check entity sets and their capabilities
-            if (oMetadata.dataServices && oMetadata.dataServices.schema) {
-                oMetadata.dataServices.schema.forEach(function (oSchema) {
-                    if (oSchema.entityContainer && oSchema.entityContainer[0]) {
-                        var oContainer = oSchema.entityContainer[0];
+          // Check entity sets and their capabilities
+          if (oMetadata.dataServices && oMetadata.dataServices.schema) {
+            oMetadata.dataServices.schema.forEach(function (oSchema) {
+              if (oSchema.entityContainer && oSchema.entityContainer[0]) {
+                var oContainer = oSchema.entityContainer[0];
 
-                        // Check entity sets
-                        if (oContainer.entitySet) {
-                            console.log("Available Entity Sets:");
-                            oContainer.entitySet.forEach(function (oEntitySet) {
-                                console.log("  - " + oEntitySet.name + " (" + oEntitySet.entityType + ")");
-                                console.log("    Creatable:", oEntitySet.creatable !== "false");
-                                console.log("    Updatable:", oEntitySet.updatable !== "false");
-                                console.log("    Deletable:", oEntitySet.deletable !== "false");
-                            });
-                        }
+                // Check entity sets
+                if (oContainer.entitySet) {
+                  console.log("Available Entity Sets:");
+                  oContainer.entitySet.forEach(function (oEntitySet) {
+                    console.log(
+                      "  - " +
+                        oEntitySet.name +
+                        " (" +
+                        oEntitySet.entityType +
+                        ")",
+                    );
+                    console.log(
+                      "    Creatable:",
+                      oEntitySet.creatable !== "false",
+                    );
+                    console.log(
+                      "    Updatable:",
+                      oEntitySet.updatable !== "false",
+                    );
+                    console.log(
+                      "    Deletable:",
+                      oEntitySet.deletable !== "false",
+                    );
+                  });
+                }
 
-                        // Check function imports
-                        if (oContainer.functionImport) {
-                            console.log("Available Function Imports:");
-                            oContainer.functionImport.forEach(function (oFunc) {
-                                console.log("  - " + oFunc.name + " (HTTP Method: " + (oFunc.httpMethod || "POST") + ")");
-                                if (oFunc.parameter) {
-                                    console.log("    Parameters:", oFunc.parameter.map(function (p) { return p.name; }));
-                                }
-                            });
-                        }
+                // Check function imports
+                if (oContainer.functionImport) {
+                  console.log("Available Function Imports:");
+                  oContainer.functionImport.forEach(function (oFunc) {
+                    console.log(
+                      "  - " +
+                        oFunc.name +
+                        " (HTTP Method: " +
+                        (oFunc.httpMethod || "POST") +
+                        ")",
+                    );
+                    if (oFunc.parameter) {
+                      console.log(
+                        "    Parameters:",
+                        oFunc.parameter.map(function (p) {
+                          return p.name;
+                        }),
+                      );
                     }
+                  });
+                }
+              }
 
-                    // Check entity types
-                    if (oSchema.entityType) {
-                        console.log("Entity Types:");
-                        oSchema.entityType.forEach(function (oEntityType) {
-                            if (oEntityType.name === "PaymentItem") {
-                                console.log("  PaymentItem properties:");
-                                if (oEntityType.property) {
-                                    oEntityType.property.forEach(function (oProp) {
-                                        console.log("    - " + oProp.name + " (" + oProp.type + ") " +
-                                            "Creatable: " + (oProp.creatable !== "false") + ", " +
-                                            "Updatable: " + (oProp.updatable !== "false"));
-                                    });
-                                }
-                            }
-                        });
+              // Check entity types
+              if (oSchema.entityType) {
+                console.log("Entity Types:");
+                oSchema.entityType.forEach(function (oEntityType) {
+                  if (oEntityType.name === "PaymentItem") {
+                    console.log("  PaymentItem properties:");
+                    if (oEntityType.property) {
+                      oEntityType.property.forEach(function (oProp) {
+                        console.log(
+                          "    - " +
+                            oProp.name +
+                            " (" +
+                            oProp.type +
+                            ") " +
+                            "Creatable: " +
+                            (oProp.creatable !== "false") +
+                            ", " +
+                            "Updatable: " +
+                            (oProp.updatable !== "false"),
+                        );
+                      });
                     }
+                  }
                 });
-            }
+              }
+            });
+          }
 
-            console.log("==================================");
+          console.log("==================================");
         },
 
         _logCurlCommand: function (oBatchCallDetails) {
-            var sCurlCommand = "curl -X POST '" + oBatchCallDetails.url + "' \\\n";
+          var sCurlCommand =
+            "curl -X POST '" + oBatchCallDetails.url + "' \\\n";
 
-            Object.keys(oBatchCallDetails.headers).forEach(function (sHeader) {
-                sCurlCommand += "  -H '" + sHeader + ": " + oBatchCallDetails.headers[sHeader] + "' \\\n";
-            });
+          Object.keys(oBatchCallDetails.headers).forEach(function (sHeader) {
+            sCurlCommand +=
+              "  -H '" +
+              sHeader +
+              ": " +
+              oBatchCallDetails.headers[sHeader] +
+              "' \\\n";
+          });
 
-            sCurlCommand += "  --data-raw '" + oBatchCallDetails.body.replace(/'/g, "\\'") + "'";
+          sCurlCommand +=
+            "  --data-raw '" +
+            oBatchCallDetails.body.replace(/'/g, "\\'") +
+            "'";
 
-            console.log("=== CURL COMMAND EQUIVALENT ===");
-            console.log(sCurlCommand);
-            console.log("===============================");
+          console.log("=== CURL COMMAND EQUIVALENT ===");
+          console.log(sCurlCommand);
+          console.log("===============================");
         },
 
-        _processBatchUpdate: function (oModel, aPayloadItems, sActionType, aSelectedItems) {
-            console.log("=== _processBatchUpdate CALLED ===");
-            console.log("Model:", oModel);
-            console.log("Payload Items Count:", aPayloadItems.length);
-            console.log("Action:", sActionType);
-            console.log("Selected Items Count:", aSelectedItems.length);
+        _processBatchUpdate: function (
+          oModel,
+          aPayloadItems,
+          sActionType,
+          aSelectedItems,
+        ) {
+          console.log("=== _processBatchUpdate CALLED ===");
+          console.log("Model:", oModel);
+          console.log("Payload Items Count:", aPayloadItems.length);
+          console.log("Action:", sActionType);
+          console.log("Selected Items Count:", aSelectedItems.length);
 
-            // Show busy indicator
-            sap.ui.core.BusyIndicator.show(0);
+          // Show busy indicator
+          sap.ui.core.BusyIndicator.show(0);
 
-            // Process each selected item with PUT call
-            console.log("=== CALLING _sendPutRequestsForSelectedItems ===");
-           // this._sendPutRequestsForSelectedItems(oModel, aPayloadItems, sActionType, aSelectedItems);
+          // Process each selected item with PUT call
+          console.log("=== CALLING _sendPutRequestsForSelectedItems ===");
+          // this._sendPutRequestsForSelectedItems(oModel, aPayloadItems, sActionType, aSelectedItems);
         },
 
-        _sendPutRequestsForSelectedItems: function (oModel, aPayloadItems, sActionType, aSelectedItems) {
-            console.log("=== _sendPutRequestsForSelectedItems CALLED ===");
-            console.log("Processing " + aPayloadItems.length + " items");
+        _sendPutRequestsForSelectedItems: function (
+          oModel,
+          aPayloadItems,
+          sActionType,
+          aSelectedItems,
+        ) {
+          console.log("=== _sendPutRequestsForSelectedItems CALLED ===");
+          console.log("Processing " + aPayloadItems.length + " items");
 
-            var sCurrentUser = this._getCurrentUserId();
-            var iProcessedCount = 0;
-            var iTotalCount = aPayloadItems.length;
-            var aErrors = [];
+          var sCurrentUser = this._getCurrentUserId();
+          var iProcessedCount = 0;
+          var iTotalCount = aPayloadItems.length;
+          var aErrors = [];
 
-            console.log("Current User:", sCurrentUser);
-            console.log("Total Count:", iTotalCount);
+          console.log("Current User:", sCurrentUser);
+          console.log("Total Count:", iTotalCount);
 
-            // Process each item sequentially
-            var fnProcessNextItem = function (iIndex) {
-                console.log("=== PROCESSING ITEM " + (iIndex + 1) + "/" + iTotalCount + " ===");
+          // Process each item sequentially
+          var fnProcessNextItem = function (iIndex) {
+            console.log(
+              "=== PROCESSING ITEM " +
+                (iIndex + 1) +
+                "/" +
+                iTotalCount +
+                " ===",
+            );
 
-                if (iIndex >= aPayloadItems.length) {
-                    // All items processed
-                    console.log("=== ALL ITEMS PROCESSED ===");
-                    sap.ui.core.BusyIndicator.hide();
+            if (iIndex >= aPayloadItems.length) {
+              // All items processed
+              console.log("=== ALL ITEMS PROCESSED ===");
+              sap.ui.core.BusyIndicator.hide();
 
-                    if (aErrors.length === 0) {
-                        console.log("✅ All " + iTotalCount + " items processed successfully");
-                        MessageToast.show(iTotalCount + " items " +
-                            (sActionType === "APPROVE" ? "approved" : "rejected") +
-                            " and sent to ZPAYMENT_APPROVAL_SRV");
-                    } else {
-                        console.log("⚠️ Processed " + iProcessedCount + " items successfully, " + aErrors.length + " failed");
-                        MessageToast.show("Processed " + iProcessedCount + " items successfully. " +
-                            aErrors.length + " items failed.");
-                    }
+              if (aErrors.length === 0) {
+                console.log(
+                  "✅ All " + iTotalCount + " items processed successfully",
+                );
+                MessageToast.show(
+                  iTotalCount +
+                    " items " +
+                    (sActionType === "APPROVE" ? "approved" : "rejected") +
+                    " and sent to ZPAYMENT_APPROVAL_SRV",
+                );
+              } else {
+                console.log(
+                  "⚠️ Processed " +
+                    iProcessedCount +
+                    " items successfully, " +
+                    aErrors.length +
+                    " failed",
+                );
+                MessageToast.show(
+                  "Processed " +
+                    iProcessedCount +
+                    " items successfully. " +
+                    aErrors.length +
+                    " items failed.",
+                );
+              }
 
-                    return;
-                }
+              return;
+            }
 
-                var oPayloadItem = aPayloadItems[iIndex];
-                console.log("Current payload item:", oPayloadItem);
+            var oPayloadItem = aPayloadItems[iIndex];
+            console.log("Current payload item:", oPayloadItem);
 
-                // this._sendSinglePutRequest(oModel, oPayloadItem, sCurrentUser, sActionType, iIndex + 1, iTotalCount,
-                //     function (bSuccess) {
-                //         console.log("PUT request result for item " + (iIndex + 1) + ":", bSuccess ? "SUCCESS" : "FAILED");
-                //         if (bSuccess) {
-                //             iProcessedCount++;
-                //         } else {
-                //             aErrors.push({
-                //                 item: oPayloadItem,
-                //                 error: "PUT request failed"
-                //             });
-                //         }
-                //         fnProcessNextItem.call(this, iIndex + 1);
-                //     }.bind(this));
-            }.bind(this);
+            // this._sendSinglePutRequest(oModel, oPayloadItem, sCurrentUser, sActionType, iIndex + 1, iTotalCount,
+            //     function (bSuccess) {
+            //         console.log("PUT request result for item " + (iIndex + 1) + ":", bSuccess ? "SUCCESS" : "FAILED");
+            //         if (bSuccess) {
+            //             iProcessedCount++;
+            //         } else {
+            //             aErrors.push({
+            //                 item: oPayloadItem,
+            //                 error: "PUT request failed"
+            //             });
+            //         }
+            //         fnProcessNextItem.call(this, iIndex + 1);
+            //     }.bind(this));
+          }.bind(this);
 
-            console.log("=== STARTING ITEM PROCESSING ===");
-            fnProcessNextItem(0);
+          console.log("=== STARTING ITEM PROCESSING ===");
+          fnProcessNextItem(0);
         },
 
         _sendSinglePutRequest: function (
-            oModel,
-            oPayloadItem,
-            sCurrentUser,
-            sActionType,
-            iItemNumber,
-            iTotalCount,
-            fnCallback
+          oModel,
+          oPayloadItem,
+          sCurrentUser,
+          sActionType,
+          iItemNumber,
+          iTotalCount,
+          fnCallback,
         ) {
-            var sApprovalNo = oPayloadItem.ApprovalNo;
-            var sVendorCode = oPayloadItem.VendorCode || oPayloadItem.VendorNumber;
+          var sApprovalNo = oPayloadItem.ApprovalNo;
+          var sVendorCode =
+            oPayloadItem.VendorCode || oPayloadItem.VendorNumber;
 
-            if (!sApprovalNo || !sVendorCode) {
-                fnCallback(false);
-                return;
-            }
+          if (!sApprovalNo || !sVendorCode) {
+            fnCallback(false);
+            return;
+          }
 
-            // helpers
-            var dec = function (v) {
-                return Number(v || 0).toFixed(2);
-            };
+          // helpers
+          var dec = function (v) {
+            return Number(v || 0).toFixed(2);
+          };
 
-            var dt = function (v) {
-                return v ? new Date(v) : null;
-            };
+          var dt = function (v) {
+            return v ? new Date(v) : null;
+          };
 
-            // POST path (Header Deep Entity)
-            var sPath = "/PaymentHeaderSet";
+          // POST path (Header Deep Entity)
+          var sPath = "/PaymentHeaderSet";
 
-            var oPayload = {
-                ApprovalNo: sApprovalNo,
-                CreatedOn: dt(oPayloadItem.CreatedOn),
-                ProfitCenter: oPayloadItem.ProfitCenter,
-                ProfitCenterName: oPayloadItem.ProfitCenterName,
-                VendorCode: sVendorCode,
-                VendorName: oPayloadItem.VendorName,
-                CompanyCode: oPayloadItem.CompanyCode,
-                CreatedBy: oPayloadItem.CreatedBy,
-                CreationTime: oPayloadItem.CreationTime,
-                OverallStatus: oPayloadItem.OverallStatus,
+          var oPayload = {
+            ApprovalNo: sApprovalNo,
+            CreatedOn: dt(oPayloadItem.CreatedOn),
+            ProfitCenter: oPayloadItem.ProfitCenter,
+            ProfitCenterName: oPayloadItem.ProfitCenterName,
+            VendorCode: sVendorCode,
+            VendorName: oPayloadItem.VendorName,
+            CompanyCode: oPayloadItem.CompanyCode,
+            CreatedBy: oPayloadItem.CreatedBy,
+            CreationTime: oPayloadItem.CreationTime,
+            OverallStatus: oPayloadItem.OverallStatus,
 
-                GrossAmount: dec(oPayloadItem.GrossAmount),
-                BaseAmount: dec(oPayloadItem.BaseAmount),
-                GSTAmount: dec(oPayloadItem.GSTAmount),
-                TDSAmount: dec(oPayloadItem.TDSAmount),
-                TotalLiability: dec(oPayloadItem.TotalLiability),
-                GST2AReflected: dec(oPayloadItem.GST2AReflected),
-                GST2ANotReflected: dec(oPayloadItem.GST2ANotReflected),
-                AmountClaimed: dec(oPayloadItem.AmountClaimed),
-                ProposedAmount: dec(oPayloadItem.ProposedAmount),
+            GrossAmount: dec(oPayloadItem.GrossAmount),
+            BaseAmount: dec(oPayloadItem.BaseAmount),
+            GSTAmount: dec(oPayloadItem.GSTAmount),
+            TDSAmount: dec(oPayloadItem.TDSAmount),
+            TotalLiability: dec(oPayloadItem.TotalLiability),
+            GST2AReflected: dec(oPayloadItem.GST2AReflected),
+            GST2ANotReflected: dec(oPayloadItem.GST2ANotReflected),
+            AmountClaimed: dec(oPayloadItem.AmountClaimed),
+            ProposedAmount: dec(oPayloadItem.ProposedAmount),
 
-                PMApprovedAmount: dec(oPayloadItem.PMApprovedAmount),
-                HODApprovedAmount: dec(oPayloadItem.HODApprovedAmount),
-                CFOApprovedAmount: dec(oPayloadItem.CFOApprovedAmount),
-                AuditorApprovedAmount: dec(oPayloadItem.AuditorApprovedAmount),
-                DirectorApprovedAmount: dec(oPayloadItem.DirectorApprovedAmount),
+            PMApprovedAmount: dec(oPayloadItem.PMApprovedAmount),
+            HODApprovedAmount: dec(oPayloadItem.HODApprovedAmount),
+            CFOApprovedAmount: dec(oPayloadItem.CFOApprovedAmount),
+            AuditorApprovedAmount: dec(oPayloadItem.AuditorApprovedAmount),
+            DirectorApprovedAmount: dec(oPayloadItem.DirectorApprovedAmount),
 
-                ToItems: {
-                    results: [
-                        {
-                            ApprovalNo: sApprovalNo,
-                            VendorCode: sVendorCode,
-                            VendorName: oPayloadItem.VendorName,
-                            ProfitCenter: oPayloadItem.ProfitCenter,
-                            ProfitCenterName: oPayloadItem.ProfitCenterName,
-                            TaxNum: oPayloadItem.TaxNum,
-                            BankKey: oPayloadItem.BankKey,
-                            DocNum: oPayloadItem.DocNum,
-                            ItemNum: oPayloadItem.ItemNum,
-                            LiabHead: oPayloadItem.LiabHead,
-                            ReferenceDoc: oPayloadItem.ReferenceDoc,
-                            PurchDoc: oPayloadItem.PurchDoc,
+            ToItems: {
+              results: [
+                {
+                  ApprovalNo: sApprovalNo,
+                  VendorCode: sVendorCode,
+                  VendorName: oPayloadItem.VendorName,
+                  ProfitCenter: oPayloadItem.ProfitCenter,
+                  ProfitCenterName: oPayloadItem.ProfitCenterName,
+                  TaxNum: oPayloadItem.TaxNum,
+                  BankKey: oPayloadItem.BankKey,
+                  DocNum: oPayloadItem.DocNum,
+                  ItemNum: oPayloadItem.ItemNum,
+                  LiabHead: oPayloadItem.LiabHead,
+                  ReferenceDoc: oPayloadItem.ReferenceDoc,
+                  PurchDoc: oPayloadItem.PurchDoc,
 
-                            DocDate: dt(oPayloadItem.DocDate),
-                            PostingDt: dt(oPayloadItem.PostingDt),
+                  DocDate: dt(oPayloadItem.DocDate),
+                  PostingDt: dt(oPayloadItem.PostingDt),
 
-                            GrossAmt: dec(oPayloadItem.GrossAmt),
-                            BaseAmt: dec(oPayloadItem.BaseAmt),
-                            GstAmt: dec(oPayloadItem.GstAmt),
-                            TdsAmount: dec(oPayloadItem.TdsAmount),
-                            TotalLiability: dec(oPayloadItem.TotalLiability),
+                  GrossAmt: dec(oPayloadItem.GrossAmt),
+                  BaseAmt: dec(oPayloadItem.BaseAmt),
+                  GstAmt: dec(oPayloadItem.GstAmt),
+                  TdsAmount: dec(oPayloadItem.TdsAmount),
+                  TotalLiability: dec(oPayloadItem.TotalLiability),
 
-                            Gst2aRef: dec(oPayloadItem.Gst2aRef),
-                            Gst2aNref: dec(oPayloadItem.Gst2aNref),
-                            AmtClaimed: dec(oPayloadItem.AmtClaimed),
-                            ProposedAmt: dec(oPayloadItem.ProposedAmt),
+                  Gst2aRef: dec(oPayloadItem.Gst2aRef),
+                  Gst2aNref: dec(oPayloadItem.Gst2aNref),
+                  AmtClaimed: dec(oPayloadItem.AmtClaimed),
+                  ProposedAmt: dec(oPayloadItem.ProposedAmt),
 
-                            Currency: "",
-                            Gstr1Details: oPayloadItem.Gstr1Details,
-                            Remark: oPayloadItem.Remark,
+                  Currency: "",
+                  Gstr1Details: oPayloadItem.Gstr1Details,
+                  Remark: oPayloadItem.Remark,
 
-                            AccountHolder: oPayloadItem.AccountHolder,
-                            AccountNumber: oPayloadItem.AccountNumber,
-                            BankName: oPayloadItem.BankName,
-                            Branch: oPayloadItem.Branch,
+                  AccountHolder: oPayloadItem.AccountHolder,
+                  AccountNumber: oPayloadItem.AccountNumber,
+                  BankName: oPayloadItem.BankName,
+                  Branch: oPayloadItem.Branch,
 
-                            ModeOfPayment: oPayloadItem.ModeOfPayment,
-                            UtrNo: oPayloadItem.UtrNo,
+                  ModeOfPayment: oPayloadItem.ModeOfPayment,
+                  UtrNo: oPayloadItem.UtrNo,
 
-                            PaidAmount1: dec(oPayloadItem.PaidAmount1),
-                            PaymentDate1: dt(oPayloadItem.PaymentDate1),
-                            PaidAmount2: dec(oPayloadItem.PaidAmount2),
-                            PaymentDate2: dt(oPayloadItem.PaymentDate2),
+                  PaidAmount1: dec(oPayloadItem.PaidAmount1),
+                  PaymentDate1: dt(oPayloadItem.PaymentDate1),
+                  PaidAmount2: dec(oPayloadItem.PaidAmount2),
+                  PaymentDate2: dt(oPayloadItem.PaymentDate2),
 
-                            TotalBalOut: dec(oPayloadItem.TotalBalOut),
-                            BalancePayable: dec(oPayloadItem.BalancePayable),
+                  TotalBalOut: dec(oPayloadItem.TotalBalOut),
+                  BalancePayable: dec(oPayloadItem.BalancePayable),
 
-                            // Approval fields
-                            PmApprAmt: dec(oPayloadItem.PmApprAmt || "44444.00"),
-                            PmUserId: oPayloadItem.PmUserId || "",
-                            PmApprStatus: oPayloadItem.PmApprStatus || "",
-                            PmApprOn: oPayloadItem.PmApprOn || null,
-                            PmApprRemarks: oPayloadItem.PmApprRemarks || "",
+                  // Approval fields
+                  PmApprAmt: dec(oPayloadItem.PmApprAmt || "44444.00"),
+                  PmUserId: oPayloadItem.PmUserId || "",
+                  PmApprStatus: oPayloadItem.PmApprStatus || "",
+                  PmApprOn: oPayloadItem.PmApprOn || null,
+                  PmApprRemarks: oPayloadItem.PmApprRemarks || "",
 
-                            HodApprAmt: dec(oPayloadItem.HodApprAmt || "44444.00"),
-                            HodUserId: oPayloadItem.HodUserId || "",
-                            HodApprStatus: oPayloadItem.HodApprStatus || "",
-                            HodApprOn: oPayloadItem.HodApprOn || null,
-                            HodApprRemarks: oPayloadItem.HodApprRemarks || "",
+                  HodApprAmt: dec(oPayloadItem.HodApprAmt || "44444.00"),
+                  HodUserId: oPayloadItem.HodUserId || "",
+                  HodApprStatus: oPayloadItem.HodApprStatus || "",
+                  HodApprOn: oPayloadItem.HodApprOn || null,
+                  HodApprRemarks: oPayloadItem.HodApprRemarks || "",
 
-                            CfoApprAmt: dec(oPayloadItem.CfoApprAmt || "0.00"),
-                            CfoUserId: oPayloadItem.CfoUserId || "",
-                            CfoApprStatus: oPayloadItem.CfoApprStatus || "",
-                            CfoApprOn: oPayloadItem.CfoApprOn || null,
-                            CfoApprRemarks: oPayloadItem.CfoApprRemarks || "",
+                  CfoApprAmt: dec(oPayloadItem.CfoApprAmt || "0.00"),
+                  CfoUserId: oPayloadItem.CfoUserId || "",
+                  CfoApprStatus: oPayloadItem.CfoApprStatus || "",
+                  CfoApprOn: oPayloadItem.CfoApprOn || null,
+                  CfoApprRemarks: oPayloadItem.CfoApprRemarks || "",
 
-                            AudApprAmt: dec(oPayloadItem.AudApprAmt || "0.00"),
-                            AudUserId: oPayloadItem.AudUserId || "",
-                            AudApprStatus: oPayloadItem.AudApprStatus || "",
-                            AudApprOn: oPayloadItem.AudApprOn || null,
-                            AudApprRemarks: oPayloadItem.AudApprRemarks || "",
+                  AudApprAmt: dec(oPayloadItem.AudApprAmt || "0.00"),
+                  AudUserId: oPayloadItem.AudUserId || "",
+                  AudApprStatus: oPayloadItem.AudApprStatus || "",
+                  AudApprOn: oPayloadItem.AudApprOn || null,
+                  AudApprRemarks: oPayloadItem.AudApprRemarks || "",
 
-                            DirApprAmt: dec(oPayloadItem.DirApprAmt || "0.00"),
-                            DirUserId: oPayloadItem.DirUserId || "",
-                            DirApprStatus: oPayloadItem.DirApprStatus || "",
-                            DirApprOn: oPayloadItem.DirApprOn || null,
-                            DirApprRemarks: oPayloadItem.DirApprRemarks || ""
-                        }
-                    ]
-                }
-            };
-            console.log("Prepared payload for POST:", oPayload);
-
-
-            // 🔴 IMPORTANT:
-            // Do NOT send approval fields during POST - remove them from the results array
-            if (oPayload.ToItems && oPayload.ToItems.results && oPayload.ToItems.results.length > 0) {
-                delete oPayload.ToItems.results[0].PmApprStatus;
-                delete oPayload.ToItems.results[0].PmApprOn;
-                delete oPayload.ToItems.results[0].PmApprRemarks;
-            }
-
-            oModel.create(sPath, oPayload, {
-                success: function () {
-                    fnCallback(true);
+                  DirApprAmt: dec(oPayloadItem.DirApprAmt || "0.00"),
+                  DirUserId: oPayloadItem.DirUserId || "",
+                  DirApprStatus: oPayloadItem.DirApprStatus || "",
+                  DirApprOn: oPayloadItem.DirApprOn || null,
+                  DirApprRemarks: oPayloadItem.DirApprRemarks || "",
                 },
-                error: function () {
-                    fnCallback(false);
-                }
-            });
-        }
-        ,
+              ],
+            },
+          };
+          console.log("Prepared payload for POST:", oPayload);
 
-        _tryAlternativeUpdateApproaches: function (oModel, aPayloadItems, sActionType, aSelectedItems) {
-            console.log("=== TRYING ALTERNATIVE UPDATE APPROACHES ===");
+          // 🔴 IMPORTANT:
+          // Do NOT send approval fields during POST - remove them from the results array
+          if (
+            oPayload.ToItems &&
+            oPayload.ToItems.results &&
+            oPayload.ToItems.results.length > 0
+          ) {
+            delete oPayload.ToItems.results[0].PmApprStatus;
+            delete oPayload.ToItems.results[0].PmApprOn;
+            delete oPayload.ToItems.results[0].PmApprRemarks;
+          }
 
-            // Try multiple approaches in sequence
-            this._tryDirectEntityUpdate(oModel, aPayloadItems, sActionType, aSelectedItems);
+          oModel.create(sPath, oPayload, {
+            success: function () {
+              fnCallback(true);
+            },
+            error: function () {
+              fnCallback(false);
+            },
+          });
+        },
+        _tryAlternativeUpdateApproaches: function (
+          oModel,
+          aPayloadItems,
+          sActionType,
+          aSelectedItems,
+        ) {
+          console.log("=== TRYING ALTERNATIVE UPDATE APPROACHES ===");
+
+          // Try multiple approaches in sequence
+          this._tryDirectEntityUpdate(
+            oModel,
+            aPayloadItems,
+            sActionType,
+            aSelectedItems,
+          );
         },
 
-        _tryDirectEntityUpdate: function (oModel, aPayloadItems, sActionType, aSelectedItems) {
-            console.log("Attempting direct entity update with different approaches...");
+        _tryDirectEntityUpdate: function (
+          oModel,
+          aPayloadItems,
+          sActionType,
+          aSelectedItems,
+        ) {
+          console.log(
+            "Attempting direct entity update with different approaches...",
+          );
 
-            var sCurrentUser = this._getCurrentUserId();
-            var iProcessedCount = 0;
-            var iTotalCount = aPayloadItems.length;
-            var aErrors = [];
+          var sCurrentUser = this._getCurrentUserId();
+          var iProcessedCount = 0;
+          var iTotalCount = aPayloadItems.length;
+          var aErrors = [];
 
-            // Process each item with multiple update strategies
-            var fnProcessNextItem = function (iIndex) {
-                if (iIndex >= aPayloadItems.length) {
-                    sap.ui.core.BusyIndicator.hide();
+          // Process each item with multiple update strategies
+          var fnProcessNextItem = function (iIndex) {
+            if (iIndex >= aPayloadItems.length) {
+              sap.ui.core.BusyIndicator.hide();
 
-                    if (aErrors.length === 0) {
-                        console.log("All " + iTotalCount + " items processed successfully");
-                        MessageToast.show(iTotalCount + " items " +
-                            (sActionType === "APPROVE" ? "approved" : "rejected") +
-                            " successfully updated in backend");
-                    } else if (iProcessedCount > 0) {
-                        console.log("Partial success: " + iProcessedCount + " items processed, " + aErrors.length + " errors");
-                        MessageToast.show("Processed " + iProcessedCount + " items successfully. " +
-                            aErrors.length + " items failed.");
-                    } else {
-                        console.log("All update attempts failed, updating local model only");
-                        MessageToast.show("Backend updates failed. Items updated locally only.");
-                    }
+              if (aErrors.length === 0) {
+                console.log(
+                  "All " + iTotalCount + " items processed successfully",
+                );
+                MessageToast.show(
+                  iTotalCount +
+                    " items " +
+                    (sActionType === "APPROVE" ? "approved" : "rejected") +
+                    " successfully updated in backend",
+                );
+              } else if (iProcessedCount > 0) {
+                console.log(
+                  "Partial success: " +
+                    iProcessedCount +
+                    " items processed, " +
+                    aErrors.length +
+                    " errors",
+                );
+                MessageToast.show(
+                  "Processed " +
+                    iProcessedCount +
+                    " items successfully. " +
+                    aErrors.length +
+                    " items failed.",
+                );
+              } else {
+                console.log(
+                  "All update attempts failed, updating local model only",
+                );
+                MessageToast.show(
+                  "Backend updates failed. Items updated locally only.",
+                );
+              }
 
-                    return;
-                }
+              return;
+            }
 
-                var oPayloadItem = aPayloadItems[iIndex];
-                this._tryMultipleUpdateMethods(oModel, oPayloadItem, sCurrentUser, iIndex + 1, iTotalCount,
-                    function (bSuccess) {
-                        if (bSuccess) {
-                            iProcessedCount++;
-                        } else {
-                            aErrors.push({
-                                item: oPayloadItem,
-                                error: "All update methods failed"
-                            });
-                        }
-                        fnProcessNextItem.call(this, iIndex + 1);
-                    }.bind(this));
-            }.bind(this);
-
-            fnProcessNextItem(0);
-        },
-
-        _tryMultipleUpdateMethods: function (oModel, oPayloadItem, sCurrentUser, iItemNumber, iTotalCount, fnCallback) {
-            var sApprovalNo = oPayloadItem.ApprovalNo;
-            var sVendorCode = oPayloadItem.VendorCode || oPayloadItem.VendorNumber;
-
-            console.log("Trying multiple update methods for item " + iItemNumber + "/" + iTotalCount);
-
-            var oUpdateData = {
-                PmApprAmt: oPayloadItem.PmApprAmt,
-                PmApprStatus: oPayloadItem.PmApprStatus,
-                PmApprRemarks: oPayloadItem.PmApprRemarks,
-                PmApprOn: new Date(),
-                PmUserId: sCurrentUser,
-                TdsAmount: oPayloadItem.TdsAmount
-            };
-
-            // Method 1: Try standard UPDATE with PUT
-            this._tryUpdateMethod1(oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, function (bSuccess) {
+            var oPayloadItem = aPayloadItems[iIndex];
+            this._tryMultipleUpdateMethods(
+              oModel,
+              oPayloadItem,
+              sCurrentUser,
+              iIndex + 1,
+              iTotalCount,
+              function (bSuccess) {
                 if (bSuccess) {
-                    fnCallback(true);
+                  iProcessedCount++;
                 } else {
-                    // Method 2: Try UPDATE with MERGE
-                    this._tryUpdateMethod2(oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, function (bSuccess) {
-                        if (bSuccess) {
-                            fnCallback(true);
-                        } else {
-                            // Method 3: Try PATCH method
-                            this._tryUpdateMethod3(oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, function (bSuccess) {
-                                if (bSuccess) {
-                                    fnCallback(true);
-                                } else {
-                                    // Method 4: Try different entity path
-                                    this._tryUpdateMethod4(oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, function (bSuccess) {
-                                        fnCallback(bSuccess);
-                                    }.bind(this));
-                                }
-                            }.bind(this));
-                        }
-                    }.bind(this));
+                  aErrors.push({
+                    item: oPayloadItem,
+                    error: "All update methods failed",
+                  });
                 }
-            }.bind(this));
+                fnProcessNextItem.call(this, iIndex + 1);
+              }.bind(this),
+            );
+          }.bind(this);
+
+          fnProcessNextItem(0);
         },
 
-        _tryUpdateMethod1: function (oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, fnCallback) {
-            var sPath = "/PaymentItemSet(ApprovalNo='" + sApprovalNo + "',VendorCode='" + sVendorCode + "')";
+        _tryMultipleUpdateMethods: function (
+          oModel,
+          oPayloadItem,
+          sCurrentUser,
+          iItemNumber,
+          iTotalCount,
+          fnCallback,
+        ) {
+          var sApprovalNo = oPayloadItem.ApprovalNo;
+          var sVendorCode =
+            oPayloadItem.VendorCode || oPayloadItem.VendorNumber;
 
-            console.log("Method 1 - Standard UPDATE (PUT): " + sPath);
+          console.log(
+            "Trying multiple update methods for item " +
+              iItemNumber +
+              "/" +
+              iTotalCount,
+          );
 
-            oModel.update(sPath, oUpdateData, {
-                success: function (oData) {
-                    console.log("Method 1 SUCCESS for item " + iItemNumber);
-                    fnCallback(true);
-                },
-                error: function (oError) {
-                    console.log("Method 1 FAILED for item " + iItemNumber + ":", oError.message);
-                    fnCallback(false);
-                }
-            });
-        },
+          var oUpdateData = {
+            PmApprAmt: oPayloadItem.PmApprAmt,
+            PmApprStatus: oPayloadItem.PmApprStatus,
+            PmApprRemarks: oPayloadItem.PmApprRemarks,
+            PmApprOn: new Date(),
+            PmUserId: sCurrentUser,
+            TdsAmount: oPayloadItem.TdsAmount,
+          };
 
-        _tryUpdateMethod2: function (oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, fnCallback) {
-            var sPath = "/PaymentItemSet(ApprovalNo='" + sApprovalNo + "',VendorCode='" + sVendorCode + "')";
-
-            console.log("Method 2 - UPDATE with MERGE: " + sPath);
-
-            oModel.update(sPath, oUpdateData, {
-                merge: true,
-                success: function (oData) {
-                    console.log("Method 2 SUCCESS for item " + iItemNumber);
-                    fnCallback(true);
-                },
-                error: function (oError) {
-                    console.log("Method 2 FAILED for item " + iItemNumber + ":", oError.message);
-                    fnCallback(false);
-                }
-            });
-        },
-
-        _tryUpdateMethod3: function (oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, fnCallback) {
-            // Try using jQuery AJAX directly with PATCH method
-            var sServiceUrl = oModel.sServiceUrl || "";
-            var sPath = "/PaymentItemSet(ApprovalNo='" + sApprovalNo + "',VendorCode='" + sVendorCode + "')";
-            var sUrl = sServiceUrl + sPath;
-
-            console.log("Method 3 - Direct PATCH request: " + sUrl);
-
-            jQuery.ajax({
-                url: sUrl,
-                type: "PATCH",
-                data: JSON.stringify(oUpdateData),
-                contentType: "application/json",
-                headers: {
-                    "Accept": "application/json",
-                    "DataServiceVersion": "2.0",
-                    "X-Requested-With": "XMLHttpRequest"
-                },
-                success: function (oData) {
-                    console.log("Method 3 SUCCESS for item " + iItemNumber);
-                    fnCallback(true);
-                },
-                error: function (jqXHR, textStatus, errorThrown) {
-                    console.log("Method 3 FAILED for item " + iItemNumber + ":", textStatus, errorThrown);
-                    fnCallback(false);
-                }
-            });
-        },
-
-        _tryUpdateMethod4: function (oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, fnCallback) {
-            // Try different entity path - maybe there's a different key structure
-            var sPath = "/PaymentItemSet('" + sApprovalNo + "')";
-
-            console.log("Method 4 - Alternative path structure: " + sPath);
-
-            oModel.update(sPath, oUpdateData, {
-                success: function (oData) {
-                    console.log("Method 4 SUCCESS for item " + iItemNumber);
-                    fnCallback(true);
-                },
-                error: function (oError) {
-                    console.log("Method 4 FAILED for item " + iItemNumber + ":", oError.message);
-
-                    // Try one more alternative - single key with VendorCode
-                    var sPath2 = "/PaymentItemSet('" + sVendorCode + "')";
-                    console.log("Method 4b - VendorCode only path: " + sPath2);
-
-                    oModel.update(sPath2, oUpdateData, {
-                        success: function (oData) {
-                            console.log("Method 4b SUCCESS for item " + iItemNumber);
-                            fnCallback(true);
-                        },
-                        error: function (oError) {
-                            console.log("Method 4b FAILED for item " + iItemNumber + ":", oError.message);
-
-                            // Final attempt: Try CREATE approach
-                            this._tryCreateApprovalRecord(oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, fnCallback);
-                        }.bind(this)
-                    });
-                }.bind(this)
-            });
-        },
-
-        _tryCreateApprovalRecord: function (oModel, sApprovalNo, sVendorCode, oUpdateData, iItemNumber, fnCallback) {
-            console.log("Method 5 - CREATE approval record for item " + iItemNumber);
-
-            // Try to create a new approval record
-            var oCreateData = Object.assign({}, oUpdateData, {
-                ApprovalNo: sApprovalNo,
-                VendorCode: sVendorCode,
-                ProcessedOn: new Date(),
-                Action: oUpdateData.PmApprStatus === "APPROVED" ? "APPROVE" : "REJECT"
-            });
-
-            // Try creating in PaymentItemSet
-            oModel.create("/PaymentItemSet", oCreateData, {
-                success: function (oData) {
-                    console.log("Method 5 CREATE SUCCESS for item " + iItemNumber);
-                    fnCallback(true);
-                },
-                error: function (oError) {
-                    console.log("Method 5 CREATE FAILED for item " + iItemNumber + ":", oError.message);
-
-                    // Try creating in a potential ApprovalSet
-                    this._tryCreateInApprovalSet(oModel, oCreateData, iItemNumber, fnCallback);
-                }.bind(this)
-            });
-        },
-
-        _tryCreateInApprovalSet: function (oModel, oCreateData, iItemNumber, fnCallback) {
-            console.log("Method 6 - Focused PaymentItemSet update attempts for item " + iItemNumber);
-
-            // Since we know PaymentItemSet exists, let's try different approaches specifically for it
-            this._tryPaymentItemSetSpecificUpdates(oModel, oCreateData, iItemNumber, fnCallback);
-        },
-
-        _tryPaymentItemSetSpecificUpdates: function (oModel, oCreateData, iItemNumber, fnCallback) {
-            var sApprovalNo = oCreateData.ApprovalNo;
-            var sVendorCode = oCreateData.VendorCode;
-
-            console.log("=== PAYMENTITEMSET UPDATE WITH CONFIRMED KEYS ===");
-            console.log("Keys: ApprovalNo and VendorCode (confirmed)");
-            console.log("ApprovalNo:", sApprovalNo);
-            console.log("VendorCode:", sVendorCode);
-
-            // Validate that we have the required key values
-            if (!sApprovalNo || !sVendorCode) {
-                console.error("Missing required key values:");
-                console.error("  ApprovalNo:", sApprovalNo);
-                console.error("  VendorCode:", sVendorCode);
-                fnCallback(false);
-                return;
-            }
-
-            // Clean and format the key values
-            var sCleanApprovalNo = String(sApprovalNo).trim();
-            var sCleanVendorCode = String(sVendorCode).trim();
-
-            console.log("Cleaned key values:");
-            console.log("  ApprovalNo:", "'" + sCleanApprovalNo + "'");
-            console.log("  VendorCode:", "'" + sCleanVendorCode + "'");
-
-            // Build the correct path
-            var sPath = "/PaymentItemSet(ApprovalNo='" + sCleanApprovalNo + "',VendorCode='" + sCleanVendorCode + "')";
-            console.log("Update path:", sPath);
-
-            // First, let's verify this item exists by reading it
-            this._verifyItemExistsBeforeUpdate(oModel, sPath, oCreateData, iItemNumber, fnCallback);
-        },
-
-        _verifyItemExistsBeforeUpdate: function (oModel, sPath, oUpdateData, iItemNumber, fnCallback) {
-            console.log("=== VERIFYING ITEM EXISTS BEFORE UPDATE ===");
-            console.log("Reading path:", sPath);
-
-            oModel.read(sPath, {
-                success: function (oData) {
-                    console.log("✓ Item exists - READ successful");
-                    console.log("Item data:", {
-                        ApprovalNo: oData.ApprovalNo,
-                        VendorCode: oData.VendorCode,
-                        PmApprStatus: oData.PmApprStatus,
-                        PmApprAmt: oData.PmApprAmt,
-                        PmApprRemarks: oData.PmApprRemarks
-                    });
-
-                    // Now try to update
-                    this._performConfirmedUpdate(oModel, sPath, oUpdateData, iItemNumber, fnCallback);
-                }.bind(this),
-                error: function (oError) {
-                    console.error("✗ Item does not exist or READ failed:", oError.message);
-                    console.log("This might indicate:");
-                    console.log("1. The key values are incorrect");
-                    console.log("2. The item doesn't exist in the backend");
-                    console.log("3. There's a different key structure");
-
-                    // Try to find the correct item by searching
-                    this._searchForCorrectItem(oModel, oUpdateData, iItemNumber, fnCallback);
-                }.bind(this)
-            });
-        },
-
-        _performConfirmedUpdate: function (oModel, sPath, oUpdateData, iItemNumber, fnCallback) {
-            console.log("=== PERFORMING CONFIRMED UPDATE ===");
-            console.log("Path:", sPath);
-
-            var oCleanUpdateData = {
-                PmApprAmt: String(oUpdateData.PmApprAmt || "0"),
-                PmApprStatus: String(oUpdateData.PmApprStatus || ""),
-                PmApprRemarks: String(oUpdateData.PmApprRemarks || ""),
-                PmApprOn: new Date(),
-                PmUserId: String(oUpdateData.PmUserId || this._getCurrentUserId()),
-                TdsAmount: String(oUpdateData.TdsAmount || "0")
-            };
-
-            console.log("Update data:", oCleanUpdateData);
-
-            oModel.update(sPath, oCleanUpdateData, {
-                success: function (oData) {
-                    console.log("✓ UPDATE SUCCESSFUL for item " + iItemNumber);
-                    console.log("Updated successfully with path:", sPath);
-                    fnCallback(true);
-                },
-                error: function (oError) {
-                    console.error("✗ UPDATE FAILED for item " + iItemNumber + ":", oError.message);
-                    console.log("Error details:", oError);
-
-                    // Try alternative update methods
-                    this._tryAlternativeUpdateMethods(oModel, sPath, oCleanUpdateData, iItemNumber, fnCallback);
-                }.bind(this)
-            });
-        },
-
-        _searchForCorrectItem: function (oModel, oUpdateData, iItemNumber, fnCallback) {
-            console.log("=== SEARCHING FOR CORRECT ITEM ===");
-            console.log("Searching for ApprovalNo:", oUpdateData.ApprovalNo);
-
-            // Search for items with the same ApprovalNo
-            oModel.read("/PaymentItemSet", {
-                urlParameters: {
-                    "$filter": "ApprovalNo eq '" + oUpdateData.ApprovalNo + "'",
-                    "$top": "10"
-                },
-                success: function (oData) {
-                    if (oData && oData.results && oData.results.length > 0) {
-                        console.log("Found " + oData.results.length + " items with ApprovalNo " + oUpdateData.ApprovalNo + ":");
-
-                        oData.results.forEach(function (oItem, iIndex) {
-                            console.log("Item " + (iIndex + 1) + ":");
-                            console.log("  ApprovalNo:", oItem.ApprovalNo);
-                            console.log("  VendorCode:", oItem.VendorCode);
-                            console.log("  VendorNumber:", oItem.VendorNumber);
-                            console.log("  ItemNum:", oItem.ItemNum);
-                        });
-
-                        // Try to find a matching item by VendorCode
-                        var oMatchingItem = oData.results.find(function (oItem) {
-                            return oItem.VendorCode === oUpdateData.VendorCode ||
-                                oItem.VendorNumber === oUpdateData.VendorCode;
-                        });
-
-                        if (oMatchingItem) {
-                            console.log("Found matching item:", oMatchingItem);
-                            var sCorrectPath = "/PaymentItemSet(ApprovalNo='" + oMatchingItem.ApprovalNo + "',VendorCode='" + oMatchingItem.VendorCode + "')";
-                            console.log("Trying with correct path:", sCorrectPath);
-                            this._performConfirmedUpdate(oModel, sCorrectPath, oUpdateData, iItemNumber, fnCallback);
-                        } else {
-                            console.log("No matching item found");
-                            fnCallback(false);
-                        }
+          // Method 1: Try standard UPDATE with PUT
+          this._tryUpdateMethod1(
+            oModel,
+            sApprovalNo,
+            sVendorCode,
+            oUpdateData,
+            iItemNumber,
+            function (bSuccess) {
+              if (bSuccess) {
+                fnCallback(true);
+              } else {
+                // Method 2: Try UPDATE with MERGE
+                this._tryUpdateMethod2(
+                  oModel,
+                  sApprovalNo,
+                  sVendorCode,
+                  oUpdateData,
+                  iItemNumber,
+                  function (bSuccess) {
+                    if (bSuccess) {
+                      fnCallback(true);
                     } else {
-                        console.log("No items found with ApprovalNo:", oUpdateData.ApprovalNo);
-                        fnCallback(false);
+                      // Method 3: Try PATCH method
+                      this._tryUpdateMethod3(
+                        oModel,
+                        sApprovalNo,
+                        sVendorCode,
+                        oUpdateData,
+                        iItemNumber,
+                        function (bSuccess) {
+                          if (bSuccess) {
+                            fnCallback(true);
+                          } else {
+                            // Method 4: Try different entity path
+                            this._tryUpdateMethod4(
+                              oModel,
+                              sApprovalNo,
+                              sVendorCode,
+                              oUpdateData,
+                              iItemNumber,
+                              function (bSuccess) {
+                                fnCallback(bSuccess);
+                              }.bind(this),
+                            );
+                          }
+                        }.bind(this),
+                      );
                     }
+                  }.bind(this),
+                );
+              }
+            }.bind(this),
+          );
+        },
+
+        _tryUpdateMethod1: function (
+          oModel,
+          sApprovalNo,
+          sVendorCode,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          var sPath =
+            "/PaymentItemSet(ApprovalNo='" +
+            sApprovalNo +
+            "',VendorCode='" +
+            sVendorCode +
+            "')";
+
+          console.log("Method 1 - Standard UPDATE (PUT): " + sPath);
+
+          oModel.update(sPath, oUpdateData, {
+            success: function (oData) {
+              console.log("Method 1 SUCCESS for item " + iItemNumber);
+              fnCallback(true);
+            },
+            error: function (oError) {
+              console.log(
+                "Method 1 FAILED for item " + iItemNumber + ":",
+                oError.message,
+              );
+              fnCallback(false);
+            },
+          });
+        },
+
+        _tryUpdateMethod2: function (
+          oModel,
+          sApprovalNo,
+          sVendorCode,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          var sPath =
+            "/PaymentItemSet(ApprovalNo='" +
+            sApprovalNo +
+            "',VendorCode='" +
+            sVendorCode +
+            "')";
+
+          console.log("Method 2 - UPDATE with MERGE: " + sPath);
+
+          oModel.update(sPath, oUpdateData, {
+            merge: true,
+            success: function (oData) {
+              console.log("Method 2 SUCCESS for item " + iItemNumber);
+              fnCallback(true);
+            },
+            error: function (oError) {
+              console.log(
+                "Method 2 FAILED for item " + iItemNumber + ":",
+                oError.message,
+              );
+              fnCallback(false);
+            },
+          });
+        },
+
+        _tryUpdateMethod3: function (
+          oModel,
+          sApprovalNo,
+          sVendorCode,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          // Try using jQuery AJAX directly with PATCH method
+          var sServiceUrl = oModel.sServiceUrl || "";
+          var sPath =
+            "/PaymentItemSet(ApprovalNo='" +
+            sApprovalNo +
+            "',VendorCode='" +
+            sVendorCode +
+            "')";
+          var sUrl = sServiceUrl + sPath;
+
+          console.log("Method 3 - Direct PATCH request: " + sUrl);
+
+          jQuery.ajax({
+            url: sUrl,
+            type: "PATCH",
+            data: JSON.stringify(oUpdateData),
+            contentType: "application/json",
+            headers: {
+              Accept: "application/json",
+              DataServiceVersion: "2.0",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            success: function (oData) {
+              console.log("Method 3 SUCCESS for item " + iItemNumber);
+              fnCallback(true);
+            },
+            error: function (jqXHR, textStatus, errorThrown) {
+              console.log(
+                "Method 3 FAILED for item " + iItemNumber + ":",
+                textStatus,
+                errorThrown,
+              );
+              fnCallback(false);
+            },
+          });
+        },
+
+        _tryUpdateMethod4: function (
+          oModel,
+          sApprovalNo,
+          sVendorCode,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          // Try different entity path - maybe there's a different key structure
+          var sPath = "/PaymentItemSet('" + sApprovalNo + "')";
+
+          console.log("Method 4 - Alternative path structure: " + sPath);
+
+          oModel.update(sPath, oUpdateData, {
+            success: function (oData) {
+              console.log("Method 4 SUCCESS for item " + iItemNumber);
+              fnCallback(true);
+            },
+            error: function (oError) {
+              console.log(
+                "Method 4 FAILED for item " + iItemNumber + ":",
+                oError.message,
+              );
+
+              // Try one more alternative - single key with VendorCode
+              var sPath2 = "/PaymentItemSet('" + sVendorCode + "')";
+              console.log("Method 4b - VendorCode only path: " + sPath2);
+
+              oModel.update(sPath2, oUpdateData, {
+                success: function (oData) {
+                  console.log("Method 4b SUCCESS for item " + iItemNumber);
+                  fnCallback(true);
+                },
+                error: function (oError) {
+                  console.log(
+                    "Method 4b FAILED for item " + iItemNumber + ":",
+                    oError.message,
+                  );
+
+                  // Final attempt: Try CREATE approach
+                  this._tryCreateApprovalRecord(
+                    oModel,
+                    sApprovalNo,
+                    sVendorCode,
+                    oUpdateData,
+                    iItemNumber,
+                    fnCallback,
+                  );
                 }.bind(this),
-                error: function (oError) {
-                    console.error("Search failed:", oError);
-                    fnCallback(false);
-                }
-            });
+              });
+            }.bind(this),
+          });
         },
 
-        _tryAlternativeUpdateMethods: function (oModel, sPath, oUpdateData, iItemNumber, fnCallback) {
-            console.log("=== TRYING ALTERNATIVE UPDATE METHODS ===");
+        _tryCreateApprovalRecord: function (
+          oModel,
+          sApprovalNo,
+          sVendorCode,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          console.log(
+            "Method 5 - CREATE approval record for item " + iItemNumber,
+          );
 
-            // Method 1: Try with merge option
-            console.log("Method 1: UPDATE with merge option");
-            oModel.update(sPath, oUpdateData, {
-                merge: true,
-                success: function (oData) {
-                    console.log("✓ UPDATE with merge SUCCESSFUL for item " + iItemNumber);
-                    fnCallback(true);
-                },
-                error: function (oError) {
-                    console.log("✗ UPDATE with merge FAILED:", oError.message);
+          // Try to create a new approval record
+          var oCreateData = Object.assign({}, oUpdateData, {
+            ApprovalNo: sApprovalNo,
+            VendorCode: sVendorCode,
+            ProcessedOn: new Date(),
+            Action:
+              oUpdateData.PmApprStatus === "APPROVED" ? "APPROVE" : "REJECT",
+          });
 
-                    // Method 2: Try PATCH with jQuery
-                    this._tryPatchMethod(sPath, oUpdateData, iItemNumber, fnCallback);
-                }.bind(this)
-            });
+          // Try creating in PaymentItemSet
+          oModel.create("/PaymentItemSet", oCreateData, {
+            success: function (oData) {
+              console.log("Method 5 CREATE SUCCESS for item " + iItemNumber);
+              fnCallback(true);
+            },
+            error: function (oError) {
+              console.log(
+                "Method 5 CREATE FAILED for item " + iItemNumber + ":",
+                oError.message,
+              );
+
+              // Try creating in a potential ApprovalSet
+              this._tryCreateInApprovalSet(
+                oModel,
+                oCreateData,
+                iItemNumber,
+                fnCallback,
+              );
+            }.bind(this),
+          });
         },
 
-        _tryPatchMethod: function (sPath, oUpdateData, iItemNumber, fnCallback) {
-            var oModel = this.getView().getModel("oModel");
-            var sServiceUrl = oModel.sServiceUrl || "";
-            var sUrl = sServiceUrl + sPath;
+        _tryCreateInApprovalSet: function (
+          oModel,
+          oCreateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          console.log(
+            "Method 6 - Focused PaymentItemSet update attempts for item " +
+              iItemNumber,
+          );
 
-            console.log("Method 2: Direct PATCH request to:", sUrl);
+          // Since we know PaymentItemSet exists, let's try different approaches specifically for it
+          this._tryPaymentItemSetSpecificUpdates(
+            oModel,
+            oCreateData,
+            iItemNumber,
+            fnCallback,
+          );
+        },
 
-            jQuery.ajax({
-                url: sUrl,
-                type: "PATCH",
-                data: JSON.stringify(oUpdateData),
-                contentType: "application/json",
-                headers: {
-                    "Accept": "application/json",
-                    "DataServiceVersion": "2.0",
-                    "X-Requested-With": "XMLHttpRequest"
-                },
-                success: function (oData) {
-                    console.log("✓ PATCH SUCCESSFUL for item " + iItemNumber);
-                    fnCallback(true);
-                },
-                error: function (jqXHR, textStatus, errorThrown) {
-                    console.log("✗ PATCH FAILED:", textStatus, errorThrown);
-                    console.log("Response:", jqXHR.responseText);
-                    fnCallback(false);
+        _tryPaymentItemSetSpecificUpdates: function (
+          oModel,
+          oCreateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          var sApprovalNo = oCreateData.ApprovalNo;
+          var sVendorCode = oCreateData.VendorCode;
+
+          console.log("=== PAYMENTITEMSET UPDATE WITH CONFIRMED KEYS ===");
+          console.log("Keys: ApprovalNo and VendorCode (confirmed)");
+          console.log("ApprovalNo:", sApprovalNo);
+          console.log("VendorCode:", sVendorCode);
+
+          // Validate that we have the required key values
+          if (!sApprovalNo || !sVendorCode) {
+            console.error("Missing required key values:");
+            console.error("  ApprovalNo:", sApprovalNo);
+            console.error("  VendorCode:", sVendorCode);
+            fnCallback(false);
+            return;
+          }
+
+          // Clean and format the key values
+          var sCleanApprovalNo = String(sApprovalNo).trim();
+          var sCleanVendorCode = String(sVendorCode).trim();
+
+          console.log("Cleaned key values:");
+          console.log("  ApprovalNo:", "'" + sCleanApprovalNo + "'");
+          console.log("  VendorCode:", "'" + sCleanVendorCode + "'");
+
+          // Build the correct path
+          var sPath =
+            "/PaymentItemSet(ApprovalNo='" +
+            sCleanApprovalNo +
+            "',VendorCode='" +
+            sCleanVendorCode +
+            "')";
+          console.log("Update path:", sPath);
+
+          // First, let's verify this item exists by reading it
+          this._verifyItemExistsBeforeUpdate(
+            oModel,
+            sPath,
+            oCreateData,
+            iItemNumber,
+            fnCallback,
+          );
+        },
+
+        _verifyItemExistsBeforeUpdate: function (
+          oModel,
+          sPath,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          console.log("=== VERIFYING ITEM EXISTS BEFORE UPDATE ===");
+          console.log("Reading path:", sPath);
+
+          oModel.read(sPath, {
+            success: function (oData) {
+              console.log("✓ Item exists - READ successful");
+              console.log("Item data:", {
+                ApprovalNo: oData.ApprovalNo,
+                VendorCode: oData.VendorCode,
+                PmApprStatus: oData.PmApprStatus,
+                PmApprAmt: oData.PmApprAmt,
+                PmApprRemarks: oData.PmApprRemarks,
+              });
+
+              // Now try to update
+              this._performConfirmedUpdate(
+                oModel,
+                sPath,
+                oUpdateData,
+                iItemNumber,
+                fnCallback,
+              );
+            }.bind(this),
+            error: function (oError) {
+              console.error(
+                "✗ Item does not exist or READ failed:",
+                oError.message,
+              );
+              console.log("This might indicate:");
+              console.log("1. The key values are incorrect");
+              console.log("2. The item doesn't exist in the backend");
+              console.log("3. There's a different key structure");
+
+              // Try to find the correct item by searching
+              this._searchForCorrectItem(
+                oModel,
+                oUpdateData,
+                iItemNumber,
+                fnCallback,
+              );
+            }.bind(this),
+          });
+        },
+
+        _performConfirmedUpdate: function (
+          oModel,
+          sPath,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          console.log("=== PERFORMING CONFIRMED UPDATE ===");
+          console.log("Path:", sPath);
+
+          var oCleanUpdateData = {
+            PmApprAmt: String(oUpdateData.PmApprAmt || "0"),
+            PmApprStatus: String(oUpdateData.PmApprStatus || ""),
+            PmApprRemarks: String(oUpdateData.PmApprRemarks || ""),
+            PmApprOn: new Date(),
+            PmUserId: String(oUpdateData.PmUserId || this._getCurrentUserId()),
+            TdsAmount: String(oUpdateData.TdsAmount || "0"),
+          };
+
+          console.log("Update data:", oCleanUpdateData);
+
+          oModel.update(sPath, oCleanUpdateData, {
+            success: function (oData) {
+              console.log("✓ UPDATE SUCCESSFUL for item " + iItemNumber);
+              console.log("Updated successfully with path:", sPath);
+              fnCallback(true);
+            },
+            error: function (oError) {
+              console.error(
+                "✗ UPDATE FAILED for item " + iItemNumber + ":",
+                oError.message,
+              );
+              console.log("Error details:", oError);
+
+              // Try alternative update methods
+              this._tryAlternativeUpdateMethods(
+                oModel,
+                sPath,
+                oCleanUpdateData,
+                iItemNumber,
+                fnCallback,
+              );
+            }.bind(this),
+          });
+        },
+
+        _searchForCorrectItem: function (
+          oModel,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          console.log("=== SEARCHING FOR CORRECT ITEM ===");
+          console.log("Searching for ApprovalNo:", oUpdateData.ApprovalNo);
+
+          // Search for items with the same ApprovalNo
+          oModel.read("/PaymentItemSet", {
+            urlParameters: {
+              $filter: "ApprovalNo eq '" + oUpdateData.ApprovalNo + "'",
+              $top: "10",
+            },
+            success: function (oData) {
+              if (oData && oData.results && oData.results.length > 0) {
+                console.log(
+                  "Found " +
+                    oData.results.length +
+                    " items with ApprovalNo " +
+                    oUpdateData.ApprovalNo +
+                    ":",
+                );
+
+                oData.results.forEach(function (oItem, iIndex) {
+                  console.log("Item " + (iIndex + 1) + ":");
+                  console.log("  ApprovalNo:", oItem.ApprovalNo);
+                  console.log("  VendorCode:", oItem.VendorCode);
+                  console.log("  VendorNumber:", oItem.VendorNumber);
+                  console.log("  ItemNum:", oItem.ItemNum);
+                });
+
+                // Try to find a matching item by VendorCode
+                var oMatchingItem = oData.results.find(function (oItem) {
+                  return (
+                    oItem.VendorCode === oUpdateData.VendorCode ||
+                    oItem.VendorNumber === oUpdateData.VendorCode
+                  );
+                });
+
+                if (oMatchingItem) {
+                  console.log("Found matching item:", oMatchingItem);
+                  var sCorrectPath =
+                    "/PaymentItemSet(ApprovalNo='" +
+                    oMatchingItem.ApprovalNo +
+                    "',VendorCode='" +
+                    oMatchingItem.VendorCode +
+                    "')";
+                  console.log("Trying with correct path:", sCorrectPath);
+                  this._performConfirmedUpdate(
+                    oModel,
+                    sCorrectPath,
+                    oUpdateData,
+                    iItemNumber,
+                    fnCallback,
+                  );
+                } else {
+                  console.log("No matching item found");
+                  fnCallback(false);
                 }
-            });
+              } else {
+                console.log(
+                  "No items found with ApprovalNo:",
+                  oUpdateData.ApprovalNo,
+                );
+                fnCallback(false);
+              }
+            }.bind(this),
+            error: function (oError) {
+              console.error("Search failed:", oError);
+              fnCallback(false);
+            },
+          });
+        },
+
+        _tryAlternativeUpdateMethods: function (
+          oModel,
+          sPath,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          console.log("=== TRYING ALTERNATIVE UPDATE METHODS ===");
+
+          // Method 1: Try with merge option
+          console.log("Method 1: UPDATE with merge option");
+          oModel.update(sPath, oUpdateData, {
+            merge: true,
+            success: function (oData) {
+              console.log(
+                "✓ UPDATE with merge SUCCESSFUL for item " + iItemNumber,
+              );
+              fnCallback(true);
+            },
+            error: function (oError) {
+              console.log("✗ UPDATE with merge FAILED:", oError.message);
+
+              // Method 2: Try PATCH with jQuery
+              this._tryPatchMethod(sPath, oUpdateData, iItemNumber, fnCallback);
+            }.bind(this),
+          });
+        },
+
+        _tryPatchMethod: function (
+          sPath,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          var oModel = this.getView().getModel("oModel");
+          var sServiceUrl = oModel.sServiceUrl || "";
+          var sUrl = sServiceUrl + sPath;
+
+          console.log("Method 2: Direct PATCH request to:", sUrl);
+
+          jQuery.ajax({
+            url: sUrl,
+            type: "PATCH",
+            data: JSON.stringify(oUpdateData),
+            contentType: "application/json",
+            headers: {
+              Accept: "application/json",
+              DataServiceVersion: "2.0",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            success: function (oData) {
+              console.log("✓ PATCH SUCCESSFUL for item " + iItemNumber);
+              fnCallback(true);
+            },
+            error: function (jqXHR, textStatus, errorThrown) {
+              console.log("✗ PATCH FAILED:", textStatus, errorThrown);
+              console.log("Response:", jqXHR.responseText);
+              fnCallback(false);
+            },
+          });
         },
 
         _analyzePaymentItemSetKeys: function (oModel) {
-            var oMetadata = oModel.getServiceMetadata();
+          var oMetadata = oModel.getServiceMetadata();
 
-            console.log("=== COMPREHENSIVE PAYMENTITEMSET KEY ANALYSIS ===");
+          console.log("=== COMPREHENSIVE PAYMENTITEMSET KEY ANALYSIS ===");
 
-            if (oMetadata && oMetadata.dataServices && oMetadata.dataServices.schema) {
-                oMetadata.dataServices.schema.forEach(function (oSchema) {
-                    console.log("Schema Namespace:", oSchema.namespace);
+          if (
+            oMetadata &&
+            oMetadata.dataServices &&
+            oMetadata.dataServices.schema
+          ) {
+            oMetadata.dataServices.schema.forEach(function (oSchema) {
+              console.log("Schema Namespace:", oSchema.namespace);
 
-                    if (oSchema.entityType) {
-                        var oPaymentItemType = oSchema.entityType.find(function (oType) {
-                            return oType.name === "PaymentItem";
-                        });
+              if (oSchema.entityType) {
+                var oPaymentItemType = oSchema.entityType.find(
+                  function (oType) {
+                    return oType.name === "PaymentItem";
+                  },
+                );
 
-                        if (oPaymentItemType) {
-                            console.log("PaymentItem EntityType found:");
-                            console.log("  Name:", oPaymentItemType.name);
+                if (oPaymentItemType) {
+                  console.log("PaymentItem EntityType found:");
+                  console.log("  Name:", oPaymentItemType.name);
 
-                            // Show key properties in detail
-                            if (oPaymentItemType.key && oPaymentItemType.key.propertyRef) {
-                                console.log("  Key Properties (" + oPaymentItemType.key.propertyRef.length + "):");
-                                oPaymentItemType.key.propertyRef.forEach(function (oKeyProp) {
-                                    console.log("    - " + oKeyProp.name);
-                                });
+                  // Show key properties in detail
+                  if (
+                    oPaymentItemType.key &&
+                    oPaymentItemType.key.propertyRef
+                  ) {
+                    console.log(
+                      "  Key Properties (" +
+                        oPaymentItemType.key.propertyRef.length +
+                        "):",
+                    );
+                    oPaymentItemType.key.propertyRef.forEach(
+                      function (oKeyProp) {
+                        console.log("    - " + oKeyProp.name);
+                      },
+                    );
 
-                                // Generate sample key path
-                                var aSampleKeys = oPaymentItemType.key.propertyRef.map(function (oKeyProp) {
-                                    return oKeyProp.name + "='SAMPLE_VALUE'";
-                                });
-                                console.log("  Sample Key Path: /PaymentItemSet(" + aSampleKeys.join(",") + ")");
-                            }
+                    // Generate sample key path
+                    var aSampleKeys = oPaymentItemType.key.propertyRef.map(
+                      function (oKeyProp) {
+                        return oKeyProp.name + "='SAMPLE_VALUE'";
+                      },
+                    );
+                    console.log(
+                      "  Sample Key Path: /PaymentItemSet(" +
+                        aSampleKeys.join(",") +
+                        ")",
+                    );
+                  }
 
-                            // Show all properties with their types and constraints
-                            if (oPaymentItemType.property) {
-                                console.log("  All Properties (" + oPaymentItemType.property.length + "):");
-                                oPaymentItemType.property.forEach(function (oProp) {
-                                    var sKeyIndicator = "";
-                                    if (oPaymentItemType.key && oPaymentItemType.key.propertyRef) {
-                                        var bIsKey = oPaymentItemType.key.propertyRef.some(function (oKeyProp) {
-                                            return oKeyProp.name === oProp.name;
-                                        });
-                                        sKeyIndicator = bIsKey ? " [KEY]" : "";
-                                    }
+                  // Show all properties with their types and constraints
+                  if (oPaymentItemType.property) {
+                    console.log(
+                      "  All Properties (" +
+                        oPaymentItemType.property.length +
+                        "):",
+                    );
+                    oPaymentItemType.property.forEach(function (oProp) {
+                      var sKeyIndicator = "";
+                      if (
+                        oPaymentItemType.key &&
+                        oPaymentItemType.key.propertyRef
+                      ) {
+                        var bIsKey = oPaymentItemType.key.propertyRef.some(
+                          function (oKeyProp) {
+                            return oKeyProp.name === oProp.name;
+                          },
+                        );
+                        sKeyIndicator = bIsKey ? " [KEY]" : "";
+                      }
 
-                                    var sConstraints = "";
-                                    if (oProp.maxLength) sConstraints += " MaxLength:" + oProp.maxLength;
-                                    if (oProp.nullable === "false") sConstraints += " NotNull";
-                                    if (oProp.creatable === "false") sConstraints += " NotCreatable";
-                                    if (oProp.updatable === "false") sConstraints += " NotUpdatable";
+                      var sConstraints = "";
+                      if (oProp.maxLength)
+                        sConstraints += " MaxLength:" + oProp.maxLength;
+                      if (oProp.nullable === "false")
+                        sConstraints += " NotNull";
+                      if (oProp.creatable === "false")
+                        sConstraints += " NotCreatable";
+                      if (oProp.updatable === "false")
+                        sConstraints += " NotUpdatable";
 
-                                    console.log("    - " + oProp.name + " (" + oProp.type + ")" + sKeyIndicator + sConstraints);
-                                });
-                            }
-                        } else {
-                            console.log("PaymentItem EntityType not found. Available EntityTypes:");
-                            oSchema.entityType.forEach(function (oType) {
-                                console.log("  - " + oType.name);
-                            });
-                        }
-                    }
+                      console.log(
+                        "    - " +
+                          oProp.name +
+                          " (" +
+                          oProp.type +
+                          ")" +
+                          sKeyIndicator +
+                          sConstraints,
+                      );
+                    });
+                  }
+                } else {
+                  console.log(
+                    "PaymentItem EntityType not found. Available EntityTypes:",
+                  );
+                  oSchema.entityType.forEach(function (oType) {
+                    console.log("  - " + oType.name);
+                  });
+                }
+              }
 
-                    // Check entity sets in detail
-                    if (oSchema.entityContainer && oSchema.entityContainer[0] && oSchema.entityContainer[0].entitySet) {
-                        var oPaymentItemSet = oSchema.entityContainer[0].entitySet.find(function (oSet) {
-                            return oSet.name === "PaymentItemSet";
-                        });
+              // Check entity sets in detail
+              if (
+                oSchema.entityContainer &&
+                oSchema.entityContainer[0] &&
+                oSchema.entityContainer[0].entitySet
+              ) {
+                var oPaymentItemSet = oSchema.entityContainer[0].entitySet.find(
+                  function (oSet) {
+                    return oSet.name === "PaymentItemSet";
+                  },
+                );
 
-                        if (oPaymentItemSet) {
-                            console.log("PaymentItemSet EntitySet found:");
-                            console.log("  Name:", oPaymentItemSet.name);
-                            console.log("  EntityType:", oPaymentItemSet.entityType);
-                            console.log("  Creatable:", oPaymentItemSet.creatable !== "false");
-                            console.log("  Updatable:", oPaymentItemSet.updatable !== "false");
-                            console.log("  Deletable:", oPaymentItemSet.deletable !== "false");
-                            console.log("  Pageable:", oPaymentItemSet.pageable !== "false");
-                            console.log("  Addressable:", oPaymentItemSet.addressable !== "false");
-                        }
-                    }
-                });
-            } else {
-                console.log("No metadata available or metadata structure is different");
-            }
+                if (oPaymentItemSet) {
+                  console.log("PaymentItemSet EntitySet found:");
+                  console.log("  Name:", oPaymentItemSet.name);
+                  console.log("  EntityType:", oPaymentItemSet.entityType);
+                  console.log(
+                    "  Creatable:",
+                    oPaymentItemSet.creatable !== "false",
+                  );
+                  console.log(
+                    "  Updatable:",
+                    oPaymentItemSet.updatable !== "false",
+                  );
+                  console.log(
+                    "  Deletable:",
+                    oPaymentItemSet.deletable !== "false",
+                  );
+                  console.log(
+                    "  Pageable:",
+                    oPaymentItemSet.pageable !== "false",
+                  );
+                  console.log(
+                    "  Addressable:",
+                    oPaymentItemSet.addressable !== "false",
+                  );
+                }
+              }
+            });
+          } else {
+            console.log(
+              "No metadata available or metadata structure is different",
+            );
+          }
 
-            console.log("================================================");
+          console.log("================================================");
 
-            // Also try to get the raw metadata XML for more details
-            this._getRawMetadata(oModel);
+          // Also try to get the raw metadata XML for more details
+          this._getRawMetadata(oModel);
         },
 
         _getRawMetadata: function (oModel) {
-            var sServiceUrl = oModel.sServiceUrl || "";
-            var sMetadataUrl = sServiceUrl + "/$metadata";
+          var sServiceUrl = oModel.sServiceUrl || "";
+          var sMetadataUrl = sServiceUrl + "/$metadata";
 
-            console.log("=== RAW METADATA ANALYSIS ===");
-            console.log("Fetching metadata from:", sMetadataUrl);
+          console.log("=== RAW METADATA ANALYSIS ===");
+          console.log("Fetching metadata from:", sMetadataUrl);
 
-            jQuery.ajax({
-                url: sMetadataUrl,
-                type: "GET",
-                dataType: "xml",
-                success: function (oXmlData) {
-                    console.log("Raw metadata XML received");
+          jQuery.ajax({
+            url: sMetadataUrl,
+            type: "GET",
+            dataType: "xml",
+            success: function (oXmlData) {
+              console.log("Raw metadata XML received");
 
-                    // Parse XML to find PaymentItem key structure
-                    var $xml = jQuery(oXmlData);
-                    var $paymentItemType = $xml.find('EntityType[Name="PaymentItem"]');
+              // Parse XML to find PaymentItem key structure
+              var $xml = jQuery(oXmlData);
+              var $paymentItemType = $xml.find(
+                'EntityType[Name="PaymentItem"]',
+              );
 
-                    if ($paymentItemType.length > 0) {
-                        console.log("PaymentItem EntityType found in XML:");
+              if ($paymentItemType.length > 0) {
+                console.log("PaymentItem EntityType found in XML:");
 
-                        var $keys = $paymentItemType.find('Key PropertyRef');
-                        console.log("Key properties from XML:");
-                        $keys.each(function () {
-                            console.log("  - " + jQuery(this).attr('Name'));
-                        });
+                var $keys = $paymentItemType.find("Key PropertyRef");
+                console.log("Key properties from XML:");
+                $keys.each(function () {
+                  console.log("  - " + jQuery(this).attr("Name"));
+                });
 
-                        var $properties = $paymentItemType.find('Property');
-                        console.log("All properties from XML:");
-                        $properties.each(function () {
-                            var $prop = jQuery(this);
-                            console.log("  - " + $prop.attr('Name') + " (" + $prop.attr('Type') + ")");
-                        });
-                    }
-                },
-                error: function (jqXHR, textStatus, errorThrown) {
-                    console.log("Failed to fetch raw metadata:", textStatus, errorThrown);
+                var $properties = $paymentItemType.find("Property");
+                console.log("All properties from XML:");
+                $properties.each(function () {
+                  var $prop = jQuery(this);
+                  console.log(
+                    "  - " +
+                      $prop.attr("Name") +
+                      " (" +
+                      $prop.attr("Type") +
+                      ")",
+                  );
+                });
+              }
+            },
+            error: function (jqXHR, textStatus, errorThrown) {
+              console.log(
+                "Failed to fetch raw metadata:",
+                textStatus,
+                errorThrown,
+              );
+            },
+          });
+
+          console.log("=============================");
+        },
+
+        _tryKeyVariations: function (
+          oModel,
+          aKeyVariations,
+          oUpdateData,
+          iItemNumber,
+          iKeyIndex,
+          fnCallback,
+        ) {
+          if (iKeyIndex >= aKeyVariations.length) {
+            console.log(
+              "All key variations failed for item " +
+                iItemNumber +
+                ". Trying dynamic key discovery...",
+            );
+            this._tryDynamicKeyDiscovery(
+              oModel,
+              oUpdateData,
+              iItemNumber,
+              fnCallback,
+            );
+            return;
+          }
+
+          var sPath = aKeyVariations[iKeyIndex];
+          console.log(
+            "Trying key variation " +
+              (iKeyIndex + 1) +
+              "/" +
+              aKeyVariations.length +
+              ": " +
+              sPath,
+          );
+
+          // Prepare clean update data (only the fields we want to update)
+          var oCleanUpdateData = {
+            PmApprAmt: oUpdateData.PmApprAmt,
+            PmApprStatus: oUpdateData.PmApprStatus,
+            PmApprRemarks: oUpdateData.PmApprRemarks,
+            PmApprOn: oUpdateData.PmApprOn || new Date(),
+            PmUserId: oUpdateData.PmUserId,
+            TdsAmount: oUpdateData.TdsAmount,
+          };
+
+          oModel.update(sPath, oCleanUpdateData, {
+            success: function (oData) {
+              console.log(
+                "✓ SUCCESS with key variation " +
+                  (iKeyIndex + 1) +
+                  " for item " +
+                  iItemNumber,
+              );
+              console.log("Successful path:", sPath);
+              fnCallback(true);
+            },
+            error: function (oError) {
+              console.log(
+                "✗ FAILED with key variation " +
+                  (iKeyIndex + 1) +
+                  " for item " +
+                  iItemNumber +
+                  ":",
+                oError.message,
+              );
+
+              // Try next variation
+              this._tryKeyVariations(
+                oModel,
+                aKeyVariations,
+                oUpdateData,
+                iItemNumber,
+                iKeyIndex + 1,
+                fnCallback,
+              );
+            }.bind(this),
+          });
+        },
+
+        _tryDynamicKeyDiscovery: function (
+          oModel,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          console.log("=== DYNAMIC KEY DISCOVERY ===");
+
+          // First, let's get actual data from PaymentItemSet to see the real structure
+          oModel.read("/PaymentItemSet", {
+            urlParameters: {
+              $top: "5",
+              $filter: "ApprovalNo eq '" + oUpdateData.ApprovalNo + "'",
+            },
+            success: function (oData) {
+              if (oData && oData.results && oData.results.length > 0) {
+                console.log("Found matching PaymentItemSet entries:");
+                oData.results.forEach(function (oItem, iIndex) {
+                  console.log("Entry " + (iIndex + 1) + ":", {
+                    ApprovalNo: oItem.ApprovalNo,
+                    VendorCode: oItem.VendorCode,
+                    VendorNumber: oItem.VendorNumber,
+                    ItemNum: oItem.ItemNum,
+                    TaxNum: oItem.TaxNum,
+                    DocNum: oItem.DocNum,
+                  });
+                });
+
+                // Try to find the exact matching item
+                var oMatchingItem = oData.results.find(function (oItem) {
+                  return (
+                    oItem.VendorCode === oUpdateData.VendorCode ||
+                    oItem.VendorNumber === oUpdateData.VendorCode
+                  );
+                });
+
+                if (oMatchingItem) {
+                  console.log("Found exact matching item:", oMatchingItem);
+                  this._tryDiscoveredKeys(
+                    oModel,
+                    oMatchingItem,
+                    oUpdateData,
+                    iItemNumber,
+                    fnCallback,
+                  );
+                } else {
+                  console.log(
+                    "No exact match found, trying first item structure",
+                  );
+                  this._tryDiscoveredKeys(
+                    oModel,
+                    oData.results[0],
+                    oUpdateData,
+                    iItemNumber,
+                    fnCallback,
+                  );
                 }
-            });
-
-            console.log("=============================");
-        },
-
-        _tryKeyVariations: function (oModel, aKeyVariations, oUpdateData, iItemNumber, iKeyIndex, fnCallback) {
-            if (iKeyIndex >= aKeyVariations.length) {
-                console.log("All key variations failed for item " + iItemNumber + ". Trying dynamic key discovery...");
-                this._tryDynamicKeyDiscovery(oModel, oUpdateData, iItemNumber, fnCallback);
-                return;
-            }
-
-            var sPath = aKeyVariations[iKeyIndex];
-            console.log("Trying key variation " + (iKeyIndex + 1) + "/" + aKeyVariations.length + ": " + sPath);
-
-            // Prepare clean update data (only the fields we want to update)
-            var oCleanUpdateData = {
-                PmApprAmt: oUpdateData.PmApprAmt,
-                PmApprStatus: oUpdateData.PmApprStatus,
-                PmApprRemarks: oUpdateData.PmApprRemarks,
-                PmApprOn: oUpdateData.PmApprOn || new Date(),
-                PmUserId: oUpdateData.PmUserId,
-                TdsAmount: oUpdateData.TdsAmount
-            };
-
-            oModel.update(sPath, oCleanUpdateData, {
-                success: function (oData) {
-                    console.log("✓ SUCCESS with key variation " + (iKeyIndex + 1) + " for item " + iItemNumber);
-                    console.log("Successful path:", sPath);
-                    fnCallback(true);
-                },
-                error: function (oError) {
-                    console.log("✗ FAILED with key variation " + (iKeyIndex + 1) + " for item " + iItemNumber + ":", oError.message);
-
-                    // Try next variation
-                    this._tryKeyVariations(oModel, aKeyVariations, oUpdateData, iItemNumber, iKeyIndex + 1, fnCallback);
-                }.bind(this)
-            });
-        },
-
-        _tryDynamicKeyDiscovery: function (oModel, oUpdateData, iItemNumber, fnCallback) {
-            console.log("=== DYNAMIC KEY DISCOVERY ===");
-
-            // First, let's get actual data from PaymentItemSet to see the real structure
-            oModel.read("/PaymentItemSet", {
-                urlParameters: {
-                    "$top": "5",
-                    "$filter": "ApprovalNo eq '" + oUpdateData.ApprovalNo + "'"
-                },
-                success: function (oData) {
-                    if (oData && oData.results && oData.results.length > 0) {
-                        console.log("Found matching PaymentItemSet entries:");
-                        oData.results.forEach(function (oItem, iIndex) {
-                            console.log("Entry " + (iIndex + 1) + ":", {
-                                ApprovalNo: oItem.ApprovalNo,
-                                VendorCode: oItem.VendorCode,
-                                VendorNumber: oItem.VendorNumber,
-                                ItemNum: oItem.ItemNum,
-                                TaxNum: oItem.TaxNum,
-                                DocNum: oItem.DocNum
-                            });
-                        });
-
-                        // Try to find the exact matching item
-                        var oMatchingItem = oData.results.find(function (oItem) {
-                            return (oItem.VendorCode === oUpdateData.VendorCode ||
-                                oItem.VendorNumber === oUpdateData.VendorCode);
-                        });
-
-                        if (oMatchingItem) {
-                            console.log("Found exact matching item:", oMatchingItem);
-                            this._tryDiscoveredKeys(oModel, oMatchingItem, oUpdateData, iItemNumber, fnCallback);
-                        } else {
-                            console.log("No exact match found, trying first item structure");
-                            this._tryDiscoveredKeys(oModel, oData.results[0], oUpdateData, iItemNumber, fnCallback);
-                        }
-                    } else {
-                        console.log("No PaymentItemSet data found for ApprovalNo:", oUpdateData.ApprovalNo);
-                        fnCallback(false);
-                    }
-                }.bind(this),
-                error: function (oError) {
-                    console.error("Failed to read PaymentItemSet for key discovery:", oError);
-                    fnCallback(false);
-                }
-            });
-        },
-
-        _tryDiscoveredKeys: function (oModel, oReferenceItem, oUpdateData, iItemNumber, fnCallback) {
-            console.log("=== TRYING DISCOVERED KEY STRUCTURES ===");
-            console.log("Reference item:", oReferenceItem);
-
-            // Build key paths based on actual data structure
-            var aDiscoveredPaths = [];
-
-            // Try all possible key combinations from the reference item
-            if (oReferenceItem.ApprovalNo && oReferenceItem.VendorCode) {
-                aDiscoveredPaths.push("/PaymentItemSet(ApprovalNo='" + oReferenceItem.ApprovalNo + "',VendorCode='" + oReferenceItem.VendorCode + "')");
-            }
-
-            if (oReferenceItem.ApprovalNo && oReferenceItem.VendorNumber) {
-                aDiscoveredPaths.push("/PaymentItemSet(ApprovalNo='" + oReferenceItem.ApprovalNo + "',VendorNumber='" + oReferenceItem.VendorNumber + "')");
-            }
-
-            if (oReferenceItem.ApprovalNo && oReferenceItem.ItemNum) {
-                aDiscoveredPaths.push("/PaymentItemSet(ApprovalNo='" + oReferenceItem.ApprovalNo + "',ItemNum='" + oReferenceItem.ItemNum + "')");
-            }
-
-            if (oReferenceItem.ApprovalNo && oReferenceItem.TaxNum) {
-                aDiscoveredPaths.push("/PaymentItemSet(ApprovalNo='" + oReferenceItem.ApprovalNo + "',TaxNum='" + oReferenceItem.TaxNum + "')");
-            }
-
-            if (oReferenceItem.ApprovalNo && oReferenceItem.DocNum) {
-                aDiscoveredPaths.push("/PaymentItemSet(ApprovalNo='" + oReferenceItem.ApprovalNo + "',DocNum='" + oReferenceItem.DocNum + "')");
-            }
-
-            // Try three-key combinations
-            if (oReferenceItem.ApprovalNo && oReferenceItem.VendorCode && oReferenceItem.ItemNum) {
-                aDiscoveredPaths.push("/PaymentItemSet(ApprovalNo='" + oReferenceItem.ApprovalNo + "',VendorCode='" + oReferenceItem.VendorCode + "',ItemNum='" + oReferenceItem.ItemNum + "')");
-            }
-
-            console.log("Discovered paths to try:", aDiscoveredPaths);
-
-            if (aDiscoveredPaths.length === 0) {
-                console.log("No valid key combinations discovered");
+              } else {
+                console.log(
+                  "No PaymentItemSet data found for ApprovalNo:",
+                  oUpdateData.ApprovalNo,
+                );
                 fnCallback(false);
-                return;
-            }
-
-            this._tryDiscoveredPaths(oModel, aDiscoveredPaths, oUpdateData, iItemNumber, 0, fnCallback);
+              }
+            }.bind(this),
+            error: function (oError) {
+              console.error(
+                "Failed to read PaymentItemSet for key discovery:",
+                oError,
+              );
+              fnCallback(false);
+            },
+          });
         },
 
-        _tryDiscoveredPaths: function (oModel, aDiscoveredPaths, oUpdateData, iItemNumber, iPathIndex, fnCallback) {
-            if (iPathIndex >= aDiscoveredPaths.length) {
-                console.log("All discovered paths failed for item " + iItemNumber);
-                fnCallback(false);
-                return;
-            }
+        _tryDiscoveredKeys: function (
+          oModel,
+          oReferenceItem,
+          oUpdateData,
+          iItemNumber,
+          fnCallback,
+        ) {
+          console.log("=== TRYING DISCOVERED KEY STRUCTURES ===");
+          console.log("Reference item:", oReferenceItem);
 
-            var sPath = aDiscoveredPaths[iPathIndex];
-            console.log("Trying discovered path " + (iPathIndex + 1) + "/" + aDiscoveredPaths.length + ": " + sPath);
+          // Build key paths based on actual data structure
+          var aDiscoveredPaths = [];
 
-            var oCleanUpdateData = {
-                PmApprAmt: oUpdateData.PmApprAmt,
-                PmApprStatus: oUpdateData.PmApprStatus,
-                PmApprRemarks: oUpdateData.PmApprRemarks,
-                PmApprOn: oUpdateData.PmApprOn || new Date(),
-                PmUserId: oUpdateData.PmUserId,
-                TdsAmount: oUpdateData.TdsAmount
-            };
+          // Try all possible key combinations from the reference item
+          if (oReferenceItem.ApprovalNo && oReferenceItem.VendorCode) {
+            aDiscoveredPaths.push(
+              "/PaymentItemSet(ApprovalNo='" +
+                oReferenceItem.ApprovalNo +
+                "',VendorCode='" +
+                oReferenceItem.VendorCode +
+                "')",
+            );
+          }
 
-            oModel.update(sPath, oCleanUpdateData, {
-                success: function (oData) {
-                    console.log("✓ SUCCESS with discovered path " + (iPathIndex + 1) + " for item " + iItemNumber);
-                    console.log("Successful path:", sPath);
-                    fnCallback(true);
-                },
-                error: function (oError) {
-                    console.log("✗ FAILED with discovered path " + (iPathIndex + 1) + " for item " + iItemNumber + ":", oError.message);
+          if (oReferenceItem.ApprovalNo && oReferenceItem.VendorNumber) {
+            aDiscoveredPaths.push(
+              "/PaymentItemSet(ApprovalNo='" +
+                oReferenceItem.ApprovalNo +
+                "',VendorNumber='" +
+                oReferenceItem.VendorNumber +
+                "')",
+            );
+          }
 
-                    // Try next path
-                    this._tryDiscoveredPaths(oModel, aDiscoveredPaths, oUpdateData, iItemNumber, iPathIndex + 1, fnCallback);
-                }.bind(this)
-            });
+          if (oReferenceItem.ApprovalNo && oReferenceItem.ItemNum) {
+            aDiscoveredPaths.push(
+              "/PaymentItemSet(ApprovalNo='" +
+                oReferenceItem.ApprovalNo +
+                "',ItemNum='" +
+                oReferenceItem.ItemNum +
+                "')",
+            );
+          }
+
+          if (oReferenceItem.ApprovalNo && oReferenceItem.TaxNum) {
+            aDiscoveredPaths.push(
+              "/PaymentItemSet(ApprovalNo='" +
+                oReferenceItem.ApprovalNo +
+                "',TaxNum='" +
+                oReferenceItem.TaxNum +
+                "')",
+            );
+          }
+
+          if (oReferenceItem.ApprovalNo && oReferenceItem.DocNum) {
+            aDiscoveredPaths.push(
+              "/PaymentItemSet(ApprovalNo='" +
+                oReferenceItem.ApprovalNo +
+                "',DocNum='" +
+                oReferenceItem.DocNum +
+                "')",
+            );
+          }
+
+          // Try three-key combinations
+          if (
+            oReferenceItem.ApprovalNo &&
+            oReferenceItem.VendorCode &&
+            oReferenceItem.ItemNum
+          ) {
+            aDiscoveredPaths.push(
+              "/PaymentItemSet(ApprovalNo='" +
+                oReferenceItem.ApprovalNo +
+                "',VendorCode='" +
+                oReferenceItem.VendorCode +
+                "',ItemNum='" +
+                oReferenceItem.ItemNum +
+                "')",
+            );
+          }
+
+          console.log("Discovered paths to try:", aDiscoveredPaths);
+
+          if (aDiscoveredPaths.length === 0) {
+            console.log("No valid key combinations discovered");
+            fnCallback(false);
+            return;
+          }
+
+          this._tryDiscoveredPaths(
+            oModel,
+            aDiscoveredPaths,
+            oUpdateData,
+            iItemNumber,
+            0,
+            fnCallback,
+          );
+        },
+
+        _tryDiscoveredPaths: function (
+          oModel,
+          aDiscoveredPaths,
+          oUpdateData,
+          iItemNumber,
+          iPathIndex,
+          fnCallback,
+        ) {
+          if (iPathIndex >= aDiscoveredPaths.length) {
+            console.log("All discovered paths failed for item " + iItemNumber);
+            fnCallback(false);
+            return;
+          }
+
+          var sPath = aDiscoveredPaths[iPathIndex];
+          console.log(
+            "Trying discovered path " +
+              (iPathIndex + 1) +
+              "/" +
+              aDiscoveredPaths.length +
+              ": " +
+              sPath,
+          );
+
+          var oCleanUpdateData = {
+            PmApprAmt: oUpdateData.PmApprAmt,
+            PmApprStatus: oUpdateData.PmApprStatus,
+            PmApprRemarks: oUpdateData.PmApprRemarks,
+            PmApprOn: oUpdateData.PmApprOn || new Date(),
+            PmUserId: oUpdateData.PmUserId,
+            TdsAmount: oUpdateData.TdsAmount,
+          };
+
+          oModel.update(sPath, oCleanUpdateData, {
+            success: function (oData) {
+              console.log(
+                "✓ SUCCESS with discovered path " +
+                  (iPathIndex + 1) +
+                  " for item " +
+                  iItemNumber,
+              );
+              console.log("Successful path:", sPath);
+              fnCallback(true);
+            },
+            error: function (oError) {
+              console.log(
+                "✗ FAILED with discovered path " +
+                  (iPathIndex + 1) +
+                  " for item " +
+                  iItemNumber +
+                  ":",
+                oError.message,
+              );
+
+              // Try next path
+              this._tryDiscoveredPaths(
+                oModel,
+                aDiscoveredPaths,
+                oUpdateData,
+                iItemNumber,
+                iPathIndex + 1,
+                fnCallback,
+              );
+            }.bind(this),
+          });
         },
 
         // Method to test service endpoints manually
@@ -3254,497 +4010,578 @@ _toABAPDateTime: function (jsDate) {
 
         // Method to show current data values for debugging
         debugCurrentDataValues: function () {
-            var oTreeModel = this.getView().getModel("treeData");
-            var aTreeData = oTreeModel.getData().treeData;
+          var oTreeModel = this.getView().getModel("treeData");
+          var aTreeData = oTreeModel.getData().treeData;
 
-            console.log("=== CURRENT DATA VALUES DEBUG ===");
+          console.log("=== CURRENT DATA VALUES DEBUG ===");
 
-            if (aTreeData.length > 0) {
-                console.log("Headers found:", aTreeData.length);
+          if (aTreeData.length > 0) {
+            console.log("Headers found:", aTreeData.length);
 
-                aTreeData.forEach(function (oHeader, iHeaderIndex) {
-                    console.log("Header " + (iHeaderIndex + 1) + ":");
-                    console.log("  ApprovalNo:", "'" + oHeader.ApprovalNo + "'");
-                    console.log("  VendorCode:", "'" + oHeader.VendorCode + "'");
-                    console.log("  Children:", oHeader.children ? oHeader.children.length : 0);
+            aTreeData.forEach(
+              function (oHeader, iHeaderIndex) {
+                console.log("Header " + (iHeaderIndex + 1) + ":");
+                console.log("  ApprovalNo:", "'" + oHeader.ApprovalNo + "'");
+                console.log("  VendorCode:", "'" + oHeader.VendorCode + "'");
+                console.log(
+                  "  Children:",
+                  oHeader.children ? oHeader.children.length : 0,
+                );
 
-                    if (oHeader.children && oHeader.children.length > 0) {
-                        oHeader.children.forEach(function (oChild, iChildIndex) {
-                            console.log("  Child " + (iChildIndex + 1) + ":");
-                            console.log("    ApprovalNo:", "'" + oChild.ApprovalNo + "'");
-                            console.log("    VendorCode:", "'" + (oChild.VendorCode || oChild.VendorNumber) + "'");
-                            console.log("    ItemNum:", "'" + oChild.ItemNum + "'");
+                if (oHeader.children && oHeader.children.length > 0) {
+                  oHeader.children.forEach(
+                    function (oChild, iChildIndex) {
+                      console.log("  Child " + (iChildIndex + 1) + ":");
+                      console.log(
+                        "    ApprovalNo:",
+                        "'" + oChild.ApprovalNo + "'",
+                      );
+                      console.log(
+                        "    VendorCode:",
+                        "'" + (oChild.VendorCode || oChild.VendorNumber) + "'",
+                      );
+                      console.log("    ItemNum:", "'" + oChild.ItemNum + "'");
 
-                            // Test this specific item
-                            if (iHeaderIndex === 0 && iChildIndex === 0) {
-                                console.log("  Testing first child item...");
-                                this.testSingleItemUpdate(oChild.ApprovalNo, oChild.VendorCode || oChild.VendorNumber);
-                            }
-                        }.bind(this));
-                    }
+                      // Test this specific item
+                      if (iHeaderIndex === 0 && iChildIndex === 0) {
+                        console.log("  Testing first child item...");
+                        this.testSingleItemUpdate(
+                          oChild.ApprovalNo,
+                          oChild.VendorCode || oChild.VendorNumber,
+                        );
+                      }
+                    }.bind(this),
+                  );
+                }
 
-                    if (iHeaderIndex === 0) return; // Only show first header for debugging
-                }.bind(this));
-            } else {
-                console.log("No tree data available");
-            }
+                if (iHeaderIndex === 0) return; // Only show first header for debugging
+              }.bind(this),
+            );
+          } else {
+            console.log("No tree data available");
+          }
 
-            console.log("=================================");
+          console.log("=================================");
         },
 
         // Method to inspect actual PaymentItemSet data structure
         inspectPaymentItemSetStructure: function () {
-            var oModel = this.getView().getModel("oModel");
+          var oModel = this.getView().getModel("oModel");
 
-            console.log("=== INSPECTING PAYMENTITEMSET STRUCTURE ===");
+          console.log("=== INSPECTING PAYMENTITEMSET STRUCTURE ===");
 
-            // Get first few items to see actual structure
-            oModel.read("/PaymentItemSet", {
-                urlParameters: {
-                    "$top": "5"
-                },
-                success: function (oData) {
-                    if (oData && oData.results && oData.results.length > 0) {
-                        console.log("PaymentItemSet sample data (" + oData.results.length + " items):");
-                        oData.results.forEach(function (oItem, iIndex) {
-                            console.log("Item " + (iIndex + 1) + ":");
-                            console.log("  ApprovalNo:", oItem.ApprovalNo);
-                            console.log("  VendorCode:", oItem.VendorCode);
-                            console.log("  VendorNumber:", oItem.VendorNumber);
-                            console.log("  ItemNum:", oItem.ItemNum);
-                            console.log("  TaxNum:", oItem.TaxNum);
-                            console.log("  DocNum:", oItem.DocNum);
-                            console.log("  All keys:", Object.keys(oItem).slice(0, 10)); // First 10 keys
-                            console.log("  ---");
-                        });
-
-                        // Now try to read individual items with different key combinations
-                        this._testIndividualItemReads(oModel, oData.results[0]);
-                    } else {
-                        console.log("No PaymentItemSet data found");
-                    }
-                }.bind(this),
-                error: function (oError) {
-                    console.error("Failed to read PaymentItemSet:", oError);
-                }
-            });
-
-            console.log("==========================================");
-        },
-
-        // _testIndividualItemReads: function (oModel, oSampleItem) {
-        //     console.log("=== TESTING INDIVIDUAL ITEM READS ===");
-        //     console.log("Using sample item:", {
-        //         ApprovalNo: oSampleItem.ApprovalNo,
-        //         VendorCode: oSampleItem.VendorCode,
-        //         VendorNumber: oSampleItem.VendorNumber,
-        //         ItemNum: oSampleItem.ItemNum
-        //     });
-
-        //     // Test different key combinations to see which one works for READ
-        //     var aTestPaths = [
-        //         "/PaymentItemSet(ApprovalNo='" + oSampleItem.ApprovalNo + "',VendorCode='" + oSampleItem.VendorCode + "')",
-        //         "/PaymentItemSet(ApprovalNo='" + oSampleItem.ApprovalNo + "',VendorNumber='" + oSampleItem.VendorNumber + "')",
-        //         "/PaymentItemSet(ApprovalNo='" + oSampleItem.ApprovalNo + "',ItemNum='" + oSampleItem.ItemNum + "')",
-        //         "/PaymentItemSet('" + oSampleItem.ApprovalNo + "')",
-        //         "/PaymentItemSet(ApprovalNo='" + oSampleItem.ApprovalNo + "')"
-        //     ];
-
-        //     aTestPaths.forEach(function (sPath, iIndex) {
-        //         console.log("Testing READ path " + (iIndex + 1) + ": " + sPath);
-
-        //         oModel.read(sPath, {
-        //             success: function (oData) {
-        //                 console.log("✓ READ SUCCESS with path: " + sPath);
-        //                 console.log("  Returned data keys:", Object.keys(oData).slice(0, 10));
-
-        //                 // If READ works, try UPDATE with the same path
-        //                 this._testUpdateWithWorkingPath(oModel, sPath, iIndex + 1);
-        //             }.bind(this),
-        //             error: function (oError) {
-        //                 console.log("✗ READ FAILED with path: " + sPath + " - " + oError.message);
-        //             }
-        //         });
-        //     }.bind(this));
-        // },
-
-        // _testUpdateWithWorkingPath: function (oModel, sWorkingPath, iPathNumber) {
-        //     console.log("=== TESTING UPDATE WITH WORKING READ PATH ===");
-        //     console.log("Path " + iPathNumber + " worked for READ, trying UPDATE: " + sWorkingPath);
-
-        //     var oTestUpdateData = {
-        //         PmApprRemarks: "Test update at " + new Date().toISOString(),
-        //         PmUserId: this._getCurrentUserId(),
-        //         PmApprOn: new Date()
-        //     };
-
-        //     oModel.update(sWorkingPath, oTestUpdateData, {
-        //         success: function (oData) {
-        //             console.log("✓ UPDATE SUCCESS with path: " + sWorkingPath);
-        //             console.log("This is the correct path structure for updates!");
-        //             MessageToast.show("Found working update path: " + sWorkingPath);
-        //         },
-        //         error: function (oError) {
-        //             console.log("✗ UPDATE FAILED with path: " + sWorkingPath + " - " + oError.message);
-        //         }
-        //     });
-        // },
-
-        _tryFunctionImportApproach: function (oModel, aPayloadItems, sActionType, aSelectedItems) {
-            // Check if there are any function imports available
-            var oMetadata = oModel.getServiceMetadata();
-            var aFunctionImports = [];
-
-            if (oMetadata && oMetadata.dataServices && oMetadata.dataServices.schema) {
-                oMetadata.dataServices.schema.forEach(function (oSchema) {
-                    if (oSchema.entityContainer && oSchema.entityContainer[0] && oSchema.entityContainer[0].functionImport) {
-                        aFunctionImports = oSchema.entityContainer[0].functionImport;
-                    }
+          // Get first few items to see actual structure
+          oModel.read("/PaymentItemSet", {
+            urlParameters: {
+              $top: "5",
+            },
+            success: function (oData) {
+              if (oData && oData.results && oData.results.length > 0) {
+                console.log(
+                  "PaymentItemSet sample data (" +
+                    oData.results.length +
+                    " items):",
+                );
+                oData.results.forEach(function (oItem, iIndex) {
+                  console.log("Item " + (iIndex + 1) + ":");
+                  console.log("  ApprovalNo:", oItem.ApprovalNo);
+                  console.log("  VendorCode:", oItem.VendorCode);
+                  console.log("  VendorNumber:", oItem.VendorNumber);
+                  console.log("  ItemNum:", oItem.ItemNum);
+                  console.log("  TaxNum:", oItem.TaxNum);
+                  console.log("  DocNum:", oItem.DocNum);
+                  console.log("  All keys:", Object.keys(oItem).slice(0, 10)); // First 10 keys
+                  console.log("  ---");
                 });
-            }
 
-            console.log("Available Function Imports:", aFunctionImports);
+                // Now try to read individual items with different key combinations
+                this._testIndividualItemReads(oModel, oData.results[0]);
+              } else {
+                console.log("No PaymentItemSet data found");
+              }
+            }.bind(this),
+            error: function (oError) {
+              console.error("Failed to read PaymentItemSet:", oError);
+            },
+          });
 
-            // Look for approval-related function imports
-            var oApprovalFunction = aFunctionImports.find(function (oFunc) {
-                var sName = oFunc.name.toLowerCase();
-                return sName.includes('approval') || sName.includes('approve') || sName.includes('update') || sName.includes('process');
-            });
-
-            if (oApprovalFunction) {
-                console.log("Found approval function import:", oApprovalFunction);
-                this._callFunctionImport(oModel, oApprovalFunction, aPayloadItems, sActionType, aSelectedItems);
-            } else {
-                console.log("No approval function import found, trying CREATE approach");
-                this._tryCreateApproach(oModel, aPayloadItems, sActionType, aSelectedItems);
-            }
+          console.log("==========================================");
         },
 
-        _callFunctionImport: function (oModel, oFunction, aPayloadItems, sActionType, aSelectedItems) {
-            console.log("Calling function import:", oFunction.name);
+        _tryFunctionImportApproach: function (
+          oModel,
+          aPayloadItems,
+          sActionType,
+          aSelectedItems,
+        ) {
+          // Check if there are any function imports available
+          var oMetadata = oModel.getServiceMetadata();
+          var aFunctionImports = [];
 
-            // Prepare parameters for function import
-            var oParameters = {};
-
-            // Add common parameters
-            oParameters.Action = sActionType;
-            oParameters.ProcessedBy = this._getCurrentUserId();
-            oParameters.ItemCount = aPayloadItems.length.toString();
-
-            // Add first item details as example (adjust based on your function import parameters)
-                if (aPayloadItems.length > 0) {
-                    var oFirstItem = aPayloadItems[0];
-                    oParameters.ApprovalNo = oFirstItem.ApprovalNo;
-                    oParameters.VendorCode = oFirstItem.VendorCode || oFirstItem.VendorNumber;
-                    oParameters.PmApprStatus = oFirstItem.PmApprStatus;
-                    oParameters.PmApprRemarks = oFirstItem.PmApprRemarks;
-                    oParameters.ProfitCenter = oFirstItem.ProfitCenter;
-                }
-
-            console.log("Function import parameters:", oParameters);
-
-            oModel.callFunction("/" + oFunction.name, {
-                urlParameters: oParameters,
-                success: function (oData) {
-                    sap.ui.core.BusyIndicator.hide();
-                    console.log("Function import call successful:", oData);
-                    MessageToast.show("Items processed successfully via function import");
-                }.bind(this),
-                error: function (oError) {
-                    console.error("Function import call failed:", oError);
-                    this._tryCreateApproach(oModel, aPayloadItems, sActionType, aSelectedItems);
-                }.bind(this)
+          if (
+            oMetadata &&
+            oMetadata.dataServices &&
+            oMetadata.dataServices.schema
+          ) {
+            oMetadata.dataServices.schema.forEach(function (oSchema) {
+              if (
+                oSchema.entityContainer &&
+                oSchema.entityContainer[0] &&
+                oSchema.entityContainer[0].functionImport
+              ) {
+                aFunctionImports = oSchema.entityContainer[0].functionImport;
+              }
             });
+          }
+
+          console.log("Available Function Imports:", aFunctionImports);
+
+          // Look for approval-related function imports
+          var oApprovalFunction = aFunctionImports.find(function (oFunc) {
+            var sName = oFunc.name.toLowerCase();
+            return (
+              sName.includes("approval") ||
+              sName.includes("approve") ||
+              sName.includes("update") ||
+              sName.includes("process")
+            );
+          });
+
+          if (oApprovalFunction) {
+            console.log("Found approval function import:", oApprovalFunction);
+            this._callFunctionImport(
+              oModel,
+              oApprovalFunction,
+              aPayloadItems,
+              sActionType,
+              aSelectedItems,
+            );
+          } else {
+            console.log(
+              "No approval function import found, trying CREATE approach",
+            );
+            this._tryCreateApproach(
+              oModel,
+              aPayloadItems,
+              sActionType,
+              aSelectedItems,
+            );
+          }
         },
 
-        _tryCreateApproach: function (oModel, aPayloadItems, sActionType, aSelectedItems) {
-            console.log("Trying CREATE approach for approval updates");
+        _callFunctionImport: function (
+          oModel,
+          oFunction,
+          aPayloadItems,
+          sActionType,
+          aSelectedItems,
+        ) {
+          console.log("Calling function import:", oFunction.name);
 
-            // Since the backend doesn't support UPDATE operations, let's just update local model
-            // and show a message that backend sync is not available
+          // Prepare parameters for function import
+          var oParameters = {};
 
-            console.log("=== BACKEND UPDATE NOT SUPPORTED ===");
-            console.log("The OData service does not support UPDATE operations on PaymentItemSet");
-            console.log("Method 'PAYMENTITEMSET_GET_ENTITY' not implemented indicates the service");
-            console.log("is read-only or requires a different approach for updates.");
-            console.log("Updating local model only.");
-            console.log("====================================");
+          // Add common parameters
+          oParameters.Action = sActionType;
+          oParameters.ProcessedBy = this._getCurrentUserId();
+          oParameters.ItemCount = aPayloadItems.length.toString();
 
-            sap.ui.core.BusyIndicator.hide();
+          // Add first item details as example (adjust based on your function import parameters)
+          if (aPayloadItems.length > 0) {
+            var oFirstItem = aPayloadItems[0];
+            oParameters.ApprovalNo = oFirstItem.ApprovalNo;
+            oParameters.VendorCode =
+              oFirstItem.VendorCode || oFirstItem.VendorNumber;
+            oParameters.PmApprStatus = oFirstItem.PmApprStatus;
+            oParameters.PmApprRemarks = oFirstItem.PmApprRemarks;
+            oParameters.ProfitCenter = oFirstItem.ProfitCenter;
+          }
 
-            // Show message to user
-            MessageToast.show(aPayloadItems.length + " items " +
-                (sActionType === "APPROVE" ? "approved" : "rejected") +
-                " locally. Backend service does not support updates.");
+          console.log("Function import parameters:", oParameters);
 
-            // Log the payload that would have been sent
-            console.log("=== PAYLOAD THAT WOULD BE SENT ===");
-            aPayloadItems.forEach(function (oItem, iIndex) {
-                console.log("Item " + (iIndex + 1) + ":", {
-                    ApprovalNo: oItem.ApprovalNo,
-                    VendorCode: oItem.VendorCode || oItem.VendorNumber,
-                    PmApprStatus: oItem.PmApprStatus,
-                    PmApprRemarks: oItem.PmApprRemarks,
-                    PmApprAmt: oItem.PmApprAmt,
-                    TdsAmount: oItem.TdsAmount,
-                    Action: sActionType
-                });
+          oModel.callFunction("/" + oFunction.name, {
+            urlParameters: oParameters,
+            success: function (oData) {
+              sap.ui.core.BusyIndicator.hide();
+              console.log("Function import call successful:", oData);
+              MessageToast.show(
+                "Items processed successfully via function import",
+              );
+            }.bind(this),
+            error: function (oError) {
+              console.error("Function import call failed:", oError);
+              this._tryCreateApproach(
+                oModel,
+                aPayloadItems,
+                sActionType,
+                aSelectedItems,
+              );
+            }.bind(this),
+          });
+        },
+
+        _tryCreateApproach: function (
+          oModel,
+          aPayloadItems,
+          sActionType,
+          aSelectedItems,
+        ) {
+          console.log("Trying CREATE approach for approval updates");
+
+          // Since the backend doesn't support UPDATE operations, let's just update local model
+          // and show a message that backend sync is not available
+
+          console.log("=== BACKEND UPDATE NOT SUPPORTED ===");
+          console.log(
+            "The OData service does not support UPDATE operations on PaymentItemSet",
+          );
+          console.log(
+            "Method 'PAYMENTITEMSET_GET_ENTITY' not implemented indicates the service",
+          );
+          console.log(
+            "is read-only or requires a different approach for updates.",
+          );
+          console.log("Updating local model only.");
+          console.log("====================================");
+
+          sap.ui.core.BusyIndicator.hide();
+
+          // Show message to user
+          MessageToast.show(
+            aPayloadItems.length +
+              " items " +
+              (sActionType === "APPROVE" ? "approved" : "rejected") +
+              " locally. Backend service does not support updates.",
+          );
+
+          // Log the payload that would have been sent
+          console.log("=== PAYLOAD THAT WOULD BE SENT ===");
+          aPayloadItems.forEach(function (oItem, iIndex) {
+            console.log("Item " + (iIndex + 1) + ":", {
+              ApprovalNo: oItem.ApprovalNo,
+              VendorCode: oItem.VendorCode || oItem.VendorNumber,
+              PmApprStatus: oItem.PmApprStatus,
+              PmApprRemarks: oItem.PmApprRemarks,
+              PmApprAmt: oItem.PmApprAmt,
+              TdsAmount: oItem.TdsAmount,
+              Action: sActionType,
             });
-            console.log("=================================");
+          });
+          console.log("=================================");
         },
 
         _logBatchRequestDetails: function (oModel, aPayloadItems, sActionType) {
-            var sServiceUrl = oModel.sServiceUrl || "";
-            var sBatchUrl = sServiceUrl + "/$batch";
-            var sBoundary = "batch_" + Date.now();
+          var sServiceUrl = oModel.sServiceUrl || "";
+          var sBatchUrl = sServiceUrl + "/$batch";
+          var sBoundary = "batch_" + Date.now();
 
-            console.log("=== BATCH REQUEST DETAILS ===");
-            console.log("Service URL:", sServiceUrl);
-            console.log("Batch URL:", sBatchUrl);
-            console.log("Action:", sActionType);
-            console.log("Items Count:", aPayloadItems.length);
-            console.log("HTTP Method: POST");
-            console.log("Content-Type: multipart/mixed; boundary=" + sBoundary);
+          console.log("=== BATCH REQUEST DETAILS ===");
+          console.log("Service URL:", sServiceUrl);
+          console.log("Batch URL:", sBatchUrl);
+          console.log("Action:", sActionType);
+          console.log("Items Count:", aPayloadItems.length);
+          console.log("HTTP Method: POST");
+          console.log("Content-Type: multipart/mixed; boundary=" + sBoundary);
 
-            // Log headers that would be sent
-            console.log("Expected Headers:", {
-                "Content-Type": "multipart/mixed; boundary=" + sBoundary,
-                "Accept": "application/json",
-                "DataServiceVersion": "2.0",
-                "X-Requested-With": "XMLHttpRequest"
+          // Log headers that would be sent
+          console.log("Expected Headers:", {
+            "Content-Type": "multipart/mixed; boundary=" + sBoundary,
+            Accept: "application/json",
+            DataServiceVersion: "2.0",
+            "X-Requested-With": "XMLHttpRequest",
+          });
+
+          // Generate the actual batch request body
+          var sBatchBody = this._generateBatchRequestBody(
+            aPayloadItems,
+            sBoundary,
+            sServiceUrl,
+          );
+          console.log("=== BATCH REQUEST BODY ===");
+          console.log(sBatchBody);
+          console.log("=========================");
+
+          // Log each item that would be in the batch
+          console.log("Batch Items Summary:");
+          aPayloadItems.forEach(function (oItem, iIndex) {
+            var sPath =
+              "/PaymentItemSet(ApprovalNo='" +
+              oItem.ApprovalNo +
+              "',VendorCode='" +
+              (oItem.VendorCode || oItem.VendorNumber) +
+              "')";
+            console.log("  Item " + (iIndex + 1) + ":", {
+              Method: "PUT",
+              Path: sPath,
+              FullURL: sServiceUrl + sPath,
+              Data: {
+                PmApprAmt: oItem.PmApprAmt,
+                PmApprStatus: oItem.PmApprStatus,
+                PmApprRemarks: oItem.PmApprRemarks,
+                TdsAmount: oItem.TdsAmount,
+              },
             });
-
-            // Generate the actual batch request body
-            var sBatchBody = this._generateBatchRequestBody(aPayloadItems, sBoundary, sServiceUrl);
-            console.log("=== BATCH REQUEST BODY ===");
-            console.log(sBatchBody);
-            console.log("=========================");
-
-            // Log each item that would be in the batch
-            console.log("Batch Items Summary:");
-            aPayloadItems.forEach(function (oItem, iIndex) {
-                var sPath = "/PaymentItemSet(ApprovalNo='" + oItem.ApprovalNo + "',VendorCode='" + (oItem.VendorCode || oItem.VendorNumber) + "')";
-                console.log("  Item " + (iIndex + 1) + ":", {
-                    Method: "PUT",
-                    Path: sPath,
-                    FullURL: sServiceUrl + sPath,
-                    Data: {
-                        PmApprAmt: oItem.PmApprAmt,
-                        PmApprStatus: oItem.PmApprStatus,
-                        PmApprRemarks: oItem.PmApprRemarks,
-                        TdsAmount: oItem.TdsAmount
-                    }
-                });
-            });
-            console.log("=============================");
+          });
+          console.log("=============================");
         },
 
-        _generateBatchRequestBody: function (aPayloadItems, sBoundary, sServiceUrl) {
-            var sCurrentUser = this._getCurrentUserId();
-            var sBatchBody = "";
+        _generateBatchRequestBody: function (
+          aPayloadItems,
+          sBoundary,
+          sServiceUrl,
+        ) {
+          var sCurrentUser = this._getCurrentUserId();
+          var sBatchBody = "";
 
-            aPayloadItems.forEach(function (oItem, iIndex) {
-                var sPath = "/PaymentItemSet(ApprovalNo='" + oItem.ApprovalNo + "',VendorCode='" + (oItem.VendorCode || oItem.VendorNumber) + "')";
-                var oUpdateData = {
-                    PmApprAmt: oItem.PmApprAmt,
-                    PmApprStatus: oItem.PmApprStatus,
-                    PmApprRemarks: oItem.PmApprRemarks,
-                    PmApprOn: new Date().toISOString(),
-                    PmUserId: sCurrentUser,
-                    TdsAmount: oItem.TdsAmount
-                };
+          aPayloadItems.forEach(function (oItem, iIndex) {
+            var sPath =
+              "/PaymentItemSet(ApprovalNo='" +
+              oItem.ApprovalNo +
+              "',VendorCode='" +
+              (oItem.VendorCode || oItem.VendorNumber) +
+              "')";
+            var oUpdateData = {
+              PmApprAmt: oItem.PmApprAmt,
+              PmApprStatus: oItem.PmApprStatus,
+              PmApprRemarks: oItem.PmApprRemarks,
+              PmApprOn: new Date().toISOString(),
+              PmUserId: sCurrentUser,
+              TdsAmount: oItem.TdsAmount,
+            };
 
-                sBatchBody += "--" + sBoundary + "\r\n";
-                sBatchBody += "Content-Type: application/http\r\n";
-                sBatchBody += "Content-Transfer-Encoding: binary\r\n";
-                sBatchBody += "\r\n";
-                sBatchBody += "PUT " + sPath + " HTTP/1.1\r\n";
-                sBatchBody += "Content-Type: application/json\r\n";
-                sBatchBody += "Accept: application/json\r\n";
-                sBatchBody += "DataServiceVersion: 2.0\r\n";
-                sBatchBody += "\r\n";
-                sBatchBody += JSON.stringify(oUpdateData) + "\r\n";
-            });
+            sBatchBody += "--" + sBoundary + "\r\n";
+            sBatchBody += "Content-Type: application/http\r\n";
+            sBatchBody += "Content-Transfer-Encoding: binary\r\n";
+            sBatchBody += "\r\n";
+            sBatchBody += "PUT " + sPath + " HTTP/1.1\r\n";
+            sBatchBody += "Content-Type: application/json\r\n";
+            sBatchBody += "Accept: application/json\r\n";
+            sBatchBody += "DataServiceVersion: 2.0\r\n";
+            sBatchBody += "\r\n";
+            sBatchBody += JSON.stringify(oUpdateData) + "\r\n";
+          });
 
-            sBatchBody += "--" + sBoundary + "--\r\n";
+          sBatchBody += "--" + sBoundary + "--\r\n";
 
-            return sBatchBody;
+          return sBatchBody;
         },
 
         // Method to simulate the actual batch call
         _simulateBatchCall: function (aPayloadItems, sActionType) {
-            var oModel = this.getView().getModel("oModel");
-            var sServiceUrl = oModel.sServiceUrl || "";
-            var sBatchUrl = sServiceUrl + "/$batch";
-            var sBoundary = "batch_" + Date.now();
-            var sBatchBody = this._generateBatchRequestBody(aPayloadItems, sBoundary, sServiceUrl);
+          var oModel = this.getView().getModel("oModel");
+          var sServiceUrl = oModel.sServiceUrl || "";
+          var sBatchUrl = sServiceUrl + "/$batch";
+          var sBoundary = "batch_" + Date.now();
+          var sBatchBody = this._generateBatchRequestBody(
+            aPayloadItems,
+            sBoundary,
+            sServiceUrl,
+          );
 
-            console.log("=== SIMULATED BATCH CALL ===");
-            console.log("URL: POST " + sBatchUrl);
-            console.log("Headers:");
-            console.log("  Content-Type: multipart/mixed; boundary=" + sBoundary);
-            console.log("  Accept: application/json");
-            console.log("  DataServiceVersion: 2.0");
-            console.log("  X-Requested-With: XMLHttpRequest");
-            console.log("");
-            console.log("Request Body:");
-            console.log(sBatchBody);
-            console.log("============================");
+          console.log("=== SIMULATED BATCH CALL ===");
+          console.log("URL: POST " + sBatchUrl);
+          console.log("Headers:");
+          console.log("  Content-Type: multipart/mixed; boundary=" + sBoundary);
+          console.log("  Accept: application/json");
+          console.log("  DataServiceVersion: 2.0");
+          console.log("  X-Requested-With: XMLHttpRequest");
+          console.log("");
+          console.log("Request Body:");
+          console.log(sBatchBody);
+          console.log("============================");
 
-            // You can copy this information to test with tools like Postman
-            return {
-                url: sBatchUrl,
-                method: "POST",
-                headers: {
-                    "Content-Type": "multipart/mixed; boundary=" + sBoundary,
-                    "Accept": "application/json",
-                    "DataServiceVersion": "2.0",
-                    "X-Requested-With": "XMLHttpRequest"
-                },
-                body: sBatchBody
-            };
+          // You can copy this information to test with tools like Postman
+          return {
+            url: sBatchUrl,
+            method: "POST",
+            headers: {
+              "Content-Type": "multipart/mixed; boundary=" + sBoundary,
+              Accept: "application/json",
+              DataServiceVersion: "2.0",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+            body: sBatchBody,
+          };
         },
 
-        _logIndividualRequestDetails: function (sPath, oUpdateData, iItemNumber) {
-            var oModel = this.getView().getModel("oModel");
-            var sServiceUrl = oModel.sServiceUrl || "";
-            var sFullUrl = sServiceUrl + sPath;
+        _logIndividualRequestDetails: function (
+          sPath,
+          oUpdateData,
+          iItemNumber,
+        ) {
+          var oModel = this.getView().getModel("oModel");
+          var sServiceUrl = oModel.sServiceUrl || "";
+          var sFullUrl = sServiceUrl + sPath;
 
-            console.log("=== INDIVIDUAL REQUEST " + iItemNumber + " ===");
-            console.log("Method: PUT");
-            console.log("URL:", sFullUrl);
-            console.log("Path:", sPath);
-            console.log("Headers:", {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "DataServiceVersion": "2.0",
-                "X-Requested-With": "XMLHttpRequest",
-                "X-HTTP-Method": "PUT"
-            });
-            console.log("Payload:", JSON.stringify(oUpdateData, null, 2));
-            console.log("Raw Payload:", oUpdateData);
-            console.log("================================");
+          console.log("=== INDIVIDUAL REQUEST " + iItemNumber + " ===");
+          console.log("Method: PUT");
+          console.log("URL:", sFullUrl);
+          console.log("Path:", sPath);
+          console.log("Headers:", {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            DataServiceVersion: "2.0",
+            "X-Requested-With": "XMLHttpRequest",
+            "X-HTTP-Method": "PUT",
+          });
+          console.log("Payload:", JSON.stringify(oUpdateData, null, 2));
+          console.log("Raw Payload:", oUpdateData);
+          console.log("================================");
         },
 
-        formatDialogStatusState: function (bIsHeader, sOverallStatus, sPmApprStatus) {
-            // choose status based on header/item
-            var sStatus = (bIsHeader ? sOverallStatus : sPmApprStatus) || "";
-            sStatus = sStatus.trim().toUpperCase();
+        formatDialogStatusState: function (
+          bIsHeader,
+          sOverallStatus,
+          sPmApprStatus,
+        ) {
+          // choose status based on header/item
+          var sStatus = (bIsHeader ? sOverallStatus : sPmApprStatus) || "";
+          sStatus = sStatus.trim().toUpperCase();
 
-            // map your backend statuses to ValueState
-            // change these values to match your actual statuses
-            if (sStatus === "APPROVED" || sStatus === "APPROVE" || sStatus === "PM_APPR") {
-                return "Success";
-            }
+          // map your backend statuses to ValueState
+          // change these values to match your actual statuses
+          if (
+            sStatus === "APPROVED" ||
+            sStatus === "APPROVE" ||
+            sStatus === "PM_APPR"
+          ) {
+            return "Success";
+          }
 
-            if (sStatus === "REJECTED" || sStatus === "REJECT" || sStatus === "PM_REJ") {
-                return "Error";
-            }
+          if (
+            sStatus === "REJECTED" ||
+            sStatus === "REJECT" ||
+            sStatus === "PM_REJ"
+          ) {
+            return "Error";
+          }
 
-            if (sStatus === "PENDING" || sStatus === "INPROCESS" || sStatus === "IN PROCESS") {
-                return "Warning";
-            }
+          if (
+            sStatus === "PENDING" ||
+            sStatus === "INPROCESS" ||
+            sStatus === "IN PROCESS"
+          ) {
+            return "Warning";
+          }
 
-            return "None";
+          return "None";
         },
 
-        formatDialogAmount: function (bIsHeader, sTotalAmount, sItemAmount, sCurrency) {
-            var sAmount = bIsHeader ? sTotalAmount : sItemAmount;
-            if (!sAmount || sAmount === "" || isNaN(parseFloat(sAmount))) {
-                return "₹0.00";
-            }
+        formatDialogAmount: function (
+          bIsHeader,
+          sTotalAmount,
+          sItemAmount,
+          sCurrency,
+        ) {
+          var sAmount = bIsHeader ? sTotalAmount : sItemAmount;
+          if (!sAmount || sAmount === "" || isNaN(parseFloat(sAmount))) {
+            return "₹0.00";
+          }
 
-            var numericValue = parseFloat(sAmount);
-            return "₹" + numericValue.toLocaleString('en-IN', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
+          var numericValue = parseFloat(sAmount);
+          return (
+            "₹" +
+            numericValue.toLocaleString("en-IN", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+          );
         },
 
-        formatDialogStatusText: function (bIsHeader, sOverallStatus, sPmApprStatus) {
-            return bIsHeader ? (sOverallStatus || "PENDING") : (sPmApprStatus || "PENDING");
+        formatDialogStatusText: function (
+          bIsHeader,
+          sOverallStatus,
+          sPmApprStatus,
+        ) {
+          return bIsHeader
+            ? sOverallStatus || "PENDING"
+            : sPmApprStatus || "PENDING";
         },
-
 
         // Formatter functions
         // Formatter functions
         formatter: {
-            formatCurrency: function (value, showInLakhs) {
-                if (!value || value === "" || isNaN(parseFloat(value))) {
-                    return "₹0.00";
-                }
-
-                var numericValue = parseFloat(value);
-
-                if (showInLakhs) {
-                    if (numericValue >= 100000) {
-                        // Convert to lakhs (1 lakh = 100,000)
-                        var lakhValue = numericValue / 100000;
-                        return "₹" + lakhValue.toFixed(2) + "L";
-                    } else if (numericValue >= 1000) {
-                        // Show in thousands for smaller amounts
-                        var thousandValue = numericValue / 1000;
-                        return "₹" + thousandValue.toFixed(2) + "K";
-                    } else {
-                        // Show as is for very small amounts
-                        return "₹" + numericValue.toFixed(2);
-                    }
-                } else {
-                    // Display in rupees with proper formatting
-                    return "₹" + numericValue.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                    });
-                }
-            },
-
-            formatIndianCurrency: function (value) {
-                if (!value || value === "" || isNaN(value)) {
-                    return "₹0.00";
-                }
-
-                var numericValue = parseFloat(value);
-                if (isNaN(numericValue)) {
-                    return "₹0.00";
-                }
-
-                var displayValue = numericValue;
-                var suffix = "";
-
-                if (numericValue >= 100000) {
-                    displayValue = numericValue / 100000;
-                    suffix = "L";
-                } else if (numericValue >= 1000) {
-                    displayValue = numericValue / 1000;
-                    suffix = "K";
-                }
-
-                return "₹" + displayValue.toFixed(2) + suffix;
-            },
-
-            statusState: function (status) {
-                if (!status) return ValueState.None;
-
-                switch (status.toUpperCase()) {
-                    case "APPROVED":
-                    case "COMPLETE":
-                    case "SUCCESS":
-                        return ValueState.Success;
-                    case "REJECTED":
-                    case "CANCELLED":
-                    case "ERROR":
-                        return ValueState.Error;
-                    case "PENDING":
-                    case "IN_PROCESS":
-                    case "WARNING":
-                        return ValueState.Warning;
-                    case "INFORMATION":
-                    case "INFO":
-                        return ValueState.Information;
-                    default:
-                        return ValueState.None;
-                }
+          formatCurrency: function (value, showInLakhs) {
+            if (!value || value === "" || isNaN(parseFloat(value))) {
+              return "₹0.00";
             }
-        }
-    });
-});
+
+            var numericValue = parseFloat(value);
+
+            if (showInLakhs) {
+              if (numericValue >= 100000) {
+                // Convert to lakhs (1 lakh = 100,000)
+                var lakhValue = numericValue / 100000;
+                return "₹" + lakhValue.toFixed(2) + "L";
+              } else if (numericValue >= 1000) {
+                // Show in thousands for smaller amounts
+                var thousandValue = numericValue / 1000;
+                return "₹" + thousandValue.toFixed(2) + "K";
+              } else {
+                // Show as is for very small amounts
+                return "₹" + numericValue.toFixed(2);
+              }
+            } else {
+              // Display in rupees with proper formatting
+              return (
+                "₹" +
+                numericValue.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })
+              );
+            }
+          },
+
+          formatIndianCurrency: function (value) {
+            if (!value || value === "" || isNaN(value)) {
+              return "₹0.00";
+            }
+
+            var numericValue = parseFloat(value);
+            if (isNaN(numericValue)) {
+              return "₹0.00";
+            }
+
+            var displayValue = numericValue;
+            var suffix = "";
+
+            if (numericValue >= 100000) {
+              displayValue = numericValue / 100000;
+              suffix = "L";
+            } else if (numericValue >= 1000) {
+              displayValue = numericValue / 1000;
+              suffix = "K";
+            }
+
+            return "₹" + displayValue.toFixed(2) + suffix;
+          },
+
+          statusState: function (status) {
+            if (!status) return ValueState.None;
+
+            switch (status.toUpperCase()) {
+              case "APPROVED":
+              case "COMPLETE":
+              case "SUCCESS":
+                return ValueState.Success;
+              case "REJECTED":
+              case "CANCELLED":
+              case "ERROR":
+                return ValueState.Error;
+              case "PENDING":
+              case "IN_PROCESS":
+              case "WARNING":
+                return ValueState.Warning;
+              case "INFORMATION":
+              case "INFO":
+                return ValueState.Information;
+              default:
+                return ValueState.None;
+            }
+          },
+        },
+      },
+    );
+  },
+);

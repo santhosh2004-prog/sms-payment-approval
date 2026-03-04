@@ -18,390 +18,460 @@ sap.ui.define(
     "use strict";
 
     return Controller.extend("com.incresol.zpaymentworkflow.controller.CFO", {
-    
-  
-         onInit: function () {
-            
+      onInit: function () {
+        var oRouter = this.getOwnerComponent().getRouter();
 
+        oRouter
+          .getRoute("CFO")
+          .attachPatternMatched(this._validateUserRole, this);
 
-            var oRouter = this.getOwnerComponent().getRouter();
+        // Load custom CSS
+        this._loadCustomCSS();
 
-    oRouter.getRoute("CFO").attachPatternMatched(this._validateUserRole, this);
-            
-            // Load custom CSS
-            this._loadCustomCSS();
+        // Initialize view state model for bulk actions and currency display
+        var oViewStateModel = new JSONModel({
+          showBulkActions: false,
+          selectedCount: 0,
+          showInLakhs: false, // Default to rupees view
+        });
+        this.getView().setModel(oViewStateModel, "viewState");
 
-            // Initialize view state model for bulk actions and currency display
-            var oViewStateModel = new JSONModel({
-                showBulkActions: false,
-                selectedCount: 0,
-                showInLakhs: false // Default to rupees view
-            });
-            this.getView().setModel(oViewStateModel, "viewState");
+        // Initialize tree data model
+        var oTreeDataModel = new JSONModel({
+          treeData: [],
+        });
+        this.getView().setModel(oTreeDataModel, "treeData");
+        this.getView().addEventDelegate({
+          onAfterRendering: function () {
+            var oTreeTable = this.byId("idTreeTable");
+            if (!oTreeTable) {
+              return;
+            }
 
-            // Initialize tree data model
-            var oTreeDataModel = new JSONModel({
-                treeData: []
-            });
-            this.getView().setModel(oTreeDataModel, "treeData");
-            this.getView().addEventDelegate({
-    onAfterRendering: function () {
-        var oTreeTable = this.byId("idTreeTable");
-        if (!oTreeTable) {
-            return;
-        }
-
-        /* ===============================
+            /* ===============================
            1️⃣ Vendor color logic (existing)
         =============================== */
-        if (!this._bVendorColorAttached) {
-            this._bVendorColorAttached = true;
+            if (!this._bVendorColorAttached) {
+              this._bVendorColorAttached = true;
 
-            oTreeTable.attachRowsUpdated(
+              oTreeTable.attachRowsUpdated(
                 function () {
-                    this._applyVendorColorsToTreeTable();
-                }.bind(this)
-            );
-        }
-         if (!this._bDefaultLayoutCaptured) {
-        this._bDefaultLayoutCaptured = true;
-        this._captureDefaultLayout();
-    }
+                  this._applyVendorColorsToTreeTable();
+                }.bind(this),
+              );
+            }
+            if (!this._bDefaultLayoutCaptured) {
+              this._bDefaultLayoutCaptured = true;
+              this._captureDefaultLayout();
+            }
 
-        /* ===============================
+            /* ===============================
            2️⃣ DEFAULT layout binding
         =============================== */
-        if (!this._bDefaultLayoutCaptured) {
-            this._bDefaultLayoutCaptured = true;
+            if (!this._bDefaultLayoutCaptured) {
+              this._bDefaultLayoutCaptured = true;
 
-            var aDefaultColumns = oTreeTable.getColumns().map(function (oColumn) {
-                return {
+              var aDefaultColumns = oTreeTable
+                .getColumns()
+                .map(function (oColumn) {
+                  return {
                     id: oColumn.getId().split("--").pop(),
-                    visible: oColumn.getVisible()
-                };
-            });
+                    visible: oColumn.getVisible(),
+                  };
+                });
 
-            var oLayoutModel = this.getView().getModel("layoutModel");
-            var aLayouts = oLayoutModel.getProperty("/layouts");
+              var oLayoutModel = this.getView().getModel("layoutModel");
+              var aLayouts = oLayoutModel.getProperty("/layouts");
 
-            var oDefaultLayout = aLayouts.find(function (oLayout) {
+              var oDefaultLayout = aLayouts.find(function (oLayout) {
                 return oLayout.id === "DEFAULT";
-            });
+              });
 
-            if (oDefaultLayout) {
+              if (oDefaultLayout) {
                 oDefaultLayout.columns = aDefaultColumns;
                 oLayoutModel.refresh(true);
+              }
             }
-        }
-    }.bind(this)
+          }.bind(this),
+        });
 
+        // Wait for OData model to be available and load data
+        this._waitForModelAndLoadData();
+        var oTreeModel = this.getView().getModel("treeData");
+        oTreeModel.attachRequestCompleted(
+          this._addSelectedFlagToTreeData.bind(this),
+        );
 
-});
-
-
-            // Wait for OData model to be available and load data
-            this._waitForModelAndLoadData();
-            var oTreeModel = this.getView().getModel("treeData");
-  oTreeModel.attachRequestCompleted(this._addSelectedFlagToTreeData.bind(this));
-
-              const oColumnModel = new sap.ui.model.json.JSONModel({
-                columns: [
-                    // { id: "idColApprovalNoteNo", label: "Approval Note No", visible: true },
-                    // { id: "colDate", label: "Date of ApprovDate of Approval Noteal Note", visible: true },
-                    // { id: "colProfitCenter", label: "Profit Center", visible: true },
-                    // { id: "colProfitCente", label: "Profit Center Name", visible: true },
-                    { id: "colVendorCode", label: "Vendor Code", visible: true },
-                    { id: "colVendorName", label: "Name of Vendor", visible: true },
-                    { id: "colLiabilityHead", label: "Liability Head", visible: true },
-                    { id: "colInvoiceNo", label: "Invoice No.", visible: true },
-                    { id: "colPurchaseOrder", label: "Purchase Order", visible: true },
-                    { id: "colDocumentNumber", label: "Document Number", visible: true },
-                    { id: "colDocumentDate", label: "Document Date", visible: true },
-                    { id: "colPostingDate", label: "Posting Date", visible: true },
-                    { id: "colGrossAmt", label: "Gross Amount", visible: true },
-                    { id: "colGST", label: "GST Amount", visible: true },
-                    { id: "colTDS", label: "TDS Amount", visible: true },
-                    { id: "colTotalLiability", label: "Total Liability", visible: true },
-                    { id: "colAmtClaimed", label: "Amount Claimed", visible: true },
-                    { id: "colGst2aRef", label: "GST Amount reflected in GSTR 2A", visible: true },
-                    { id: "colGst2aNref", label: "GST Amount not reflected in GSTR 2A", visible: true },
-                    { id: "colAmtAlreadyClaimed", label: "Amount already claimed in approval notes", visible: true },
-                    { id: "colAprnoRef", label: "Approval notes Pr. Ref", visible: true },
-                    { id: "colAmtProposed", label: "Amount proposed to be paid", visible: true },
-                    { id: "colPmApprAmt", label: "Amount approved by Project Manager", visible: true },
-                    { id: "colCfoApprAmt", label: "Amount approved by CFO", visible: true },
-                  ,
-                    { id: "colCfoRemark", label: "CFO Remark", visible: true }
-                    ,
-                    { id: "colBankName", label: "Bank Name", visible: true },
-                    { id: "colAccountNumber", label: "Account Number", visible: true },
-                    { id: "colCurrency", label: "Currency", visible: true },
-                    { id: "colCompanyCode", label: "Company Code", visible: true },
-                    { id: "colCreatedBy", label: "Created By", visible: true },
-                    { id: "colCreationTime", label: "Creation Time", visible: true },
-                    { id: "colItemCount", label: "Item Count", visible: true },
-                    { id: "colTaxNumber", label: "Tax Number", visible: true },
-                    { id: "colBankKey", label: "Bank Key", visible: true },
-                    { id: "colReferenceDocument", label: "Reference Document", visible: true },
-                    { id: "colGstr1Details", label: "GSTR1 Details", visible: true },
-                    { id: "colGeneralRemark", label: "General Remark", visible: true },
-                    { id: "colAccountHolder", label: "Account Holder Name", visible: true },
-                    { id: "colBranch", label: "Branch", visible: true },
-                ]
-            });
-            this.getView().setModel(oColumnModel, "columnModel");
-         const oLayoutModel = new sap.ui.model.json.JSONModel({
-    layouts: [
-        {
-            id: "DEFAULT",
-            name: "Default Layout",
-            isDefault: true,
-            columns: [] // will be filled AFTER rendering
-        },
-        {
-            id: "MINIMAL",
-            name: "Minimal",
-            isDefault: false,
-            columns: [
+        const oColumnModel = new sap.ui.model.json.JSONModel({
+          columns: [
+            // { id: "idColApprovalNoteNo", label: "Approval Note No", visible: true },
+            // { id: "colDate", label: "Date of ApprovDate of Approval Noteal Note", visible: true },
+            // { id: "colProfitCenter", label: "Profit Center", visible: true },
+            // { id: "colProfitCente", label: "Profit Center Name", visible: true },
+            { id: "colVendorCode", label: "Vendor Code", visible: true },
+            { id: "colVendorName", label: "Name of Vendor", visible: true },
+            { id: "colLiabilityHead", label: "Liability Head", visible: true },
+            { id: "colInvoiceNo", label: "Invoice No.", visible: true },
+            { id: "colPurchaseOrder", label: "Purchase Order", visible: true },
+            {
+              id: "colDocumentNumber",
+              label: "Document Number",
+              visible: true,
+            },
+            { id: "colDocumentDate", label: "Document Date", visible: true },
+            { id: "colPostingDate", label: "Posting Date", visible: true },
+            { id: "colGrossAmt", label: "Gross Amount", visible: true },
+            { id: "colGST", label: "GST Amount", visible: true },
+            { id: "colTDS", label: "TDS Amount", visible: true },
+            {
+              id: "colTotalLiability",
+              label: "Total Liability",
+              visible: true,
+            },
+            { id: "colAmtClaimed", label: "Amount Claimed", visible: true },
+            {
+              id: "colGst2aRef",
+              label: "GST Amount reflected in GSTR 2A",
+              visible: true,
+            },
+            {
+              id: "colGst2aNref",
+              label: "GST Amount not reflected in GSTR 2A",
+              visible: true,
+            },
+            {
+              id: "colAmtAlreadyClaimed",
+              label: "Amount already claimed in approval notes",
+              visible: true,
+            },
+            {
+              id: "colAprnoRef",
+              label: "Approval notes Pr. Ref",
+              visible: true,
+            },
+            {
+              id: "colAmtProposed",
+              label: "Amount proposed to be paid",
+              visible: true,
+            },
+            {
+              id: "colPmApprAmt",
+              label: "Amount approved by Project Manager",
+              visible: true,
+            },
+            {
+              id: "colCfoApprAmt",
+              label: "Amount approved by CFO",
+              visible: true,
+            },
+            ,
+            { id: "colCfoRemark", label: "CFO Remark", visible: true },
+            { id: "colBankName", label: "Bank Name", visible: true },
+            { id: "colAccountNumber", label: "Account Number", visible: true },
+            { id: "colCurrency", label: "Currency", visible: true },
+            { id: "colCompanyCode", label: "Company Code", visible: true },
+            { id: "colCreatedBy", label: "Created By", visible: true },
+            { id: "colCreationTime", label: "Creation Time", visible: true },
+            { id: "colItemCount", label: "Item Count", visible: true },
+            { id: "colTaxNumber", label: "Tax Number", visible: true },
+            { id: "colBankKey", label: "Bank Key", visible: true },
+            {
+              id: "colReferenceDocument",
+              label: "Reference Document",
+              visible: true,
+            },
+            { id: "colGstr1Details", label: "GSTR1 Details", visible: true },
+            { id: "colGeneralRemark", label: "General Remark", visible: true },
+            {
+              id: "colAccountHolder",
+              label: "Account Holder Name",
+              visible: true,
+            },
+            { id: "colBranch", label: "Branch", visible: true },
+          ],
+        });
+        this.getView().setModel(oColumnModel, "columnModel");
+        const oLayoutModel = new sap.ui.model.json.JSONModel({
+          layouts: [
+            {
+              id: "DEFAULT",
+              name: "Default Layout",
+              isDefault: true,
+              columns: [], // will be filled AFTER rendering
+            },
+            {
+              id: "MINIMAL",
+              name: "Minimal",
+              isDefault: false,
+              columns: [
                 { id: "colVendorCode", visible: true },
                 { id: "colVendorName", visible: true },
                 { id: "colGrossAmt", visible: true },
-                { id: "colPmStatus", visible: true }
-            ]
+                { id: "colPmStatus", visible: true },
+              ],
+            },
+          ],
+          selectedLayoutId: "DEFAULT",
+        });
+
+        this.getView().setModel(oLayoutModel, "layoutModel");
+      },
+      _createDefaultLayoutFromView: function () {
+        var oTreeTable = this.byId("idTreeTable");
+        if (!oTreeTable) {
+          return [];
         }
-    ],
-    selectedLayoutId: "DEFAULT"
-});
 
-this.getView().setModel(oLayoutModel, "layoutModel");
-            
-        },
-        _createDefaultLayoutFromView: function () {
-    var oTreeTable = this.byId("idTreeTable");
-    if (!oTreeTable) {
-        return [];
-    }
-
-    return oTreeTable.getColumns().map(function (oColumn) {
-        return {
+        return oTreeTable.getColumns().map(function (oColumn) {
+          return {
             id: oColumn.getId().split("--").pop(), // safe ID
-            visible: oColumn.getVisible()
-        };
-    });
-}
-,
-_validateUserRole: function () {
+            visible: oColumn.getVisible(),
+          };
+        });
+      },
+      _validateUserRole: function () {
+        var oODataModel = this.getOwnerComponent().getModel("oModel");
+        var oRouter = this.getOwnerComponent().getRouter();
+        var that = this;
 
-            var oODataModel = this.getOwnerComponent().getModel("oModel");
-            var oRouter = this.getOwnerComponent().getRouter();
-            var that = this;
+        oODataModel.read("/UserApprovalLevelSet", {
+          success: function (oData) {
+            if (!oData.results || oData.results.length === 0) {
+              MessageBox.error("User verification data not found");
+              oRouter.navTo("Home", {}, true);
+              return;
+            }
 
-            oODataModel.read("/UserApprovalLevelSet", {
+            var oUser = oData.results[0];
 
-                success: function (oData) {
-
-                    if (!oData.results || oData.results.length === 0) {
-                        MessageBox.error("User verification data not found");
-                        oRouter.navTo("Home", {}, true);
-                        return;
-                    }
-
-                    var oUser = oData.results[0];
-
-                    // 🔹 Create Local Model
-                    var oLocalModel = new JSONModel({
-                        UserName: oUser.UserName,
-                        ApprovalLevel: oUser.ApprovalLevel
-                    });
-
-                    that.getView().setModel(oLocalModel, "localUser");
-
-                    // 🔹 Validate CFO Role
-                    if (oUser.ApprovalLevel !== "CFO") {
-                        MessageBox.error("Unauthorized Access");
-                       oRouter.navTo("NotFound", {}, true);
-                       oRouter.initialize();
-
-                    }
-                },
-
-                error: function () {
-                    MessageBox.error("Failed to verify user");
-                  oRouter.navTo("NotFound", {}, true);
-                  oRouter.initialize();
-
-                }
-
+            // 🔹 Create Local Model
+            var oLocalModel = new JSONModel({
+              UserName: oUser.UserName,
+              ApprovalLevel: oUser.ApprovalLevel,
             });
-        },
 
-        _loadCustomCSS: function() {
-            // Ensure CSS is loaded
-            try {
-                var sStylePath = sap.ui.require.toUrl("com/incresol/zpaymentworkflow/css/style.css");
-                var oLink = document.createElement("link");
-                oLink.rel = "stylesheet";
-                oLink.type = "text/css";
-                oLink.href = sStylePath;
-                document.head.appendChild(oLink);
-                console.log("Custom CSS loaded from:", sStylePath);
-            } catch (e) {
-                console.warn("Could not load custom CSS:", e);
-                // Fallback: try relative path
-                var oLink2 = document.createElement("link");
-                oLink2.rel = "stylesheet";
-                oLink2.type = "text/css";
-                oLink2.href = "./css/style.css";
-                document.head.appendChild(oLink2);
+            that.getView().setModel(oLocalModel, "localUser");
+
+            // 🔹 Validate CFO Role
+            if (oUser.ApprovalLevel !== "CFO") {
+              MessageBox.error("Unauthorized Access");
+              oRouter.navTo("NotFound", {}, true);
+              oRouter.initialize();
             }
-        },
-        _applyVendorColorsToTreeTable: function () {
-  var oTreeTable = this.byId("idTreeTable");
-  if (!oTreeTable) {
-    return;
-  }
+          },
 
-  var aColorClasses = [
-    "vendorColor1",
-    "vendorColor2",
-    "vendorColor3",
-    "vendorColor4",
-    "vendorColor5",
-  ];
+          error: function () {
+            MessageBox.error("Failed to verify user");
+            oRouter.navTo("NotFound", {}, true);
+            oRouter.initialize();
+          },
+        });
+      },
 
-  // safety init (in case)
-  this._vendorColorMap = this._vendorColorMap || {};
-  this._vendorColorIndex = this._vendorColorIndex || 0;
+      _loadCustomCSS: function () {
+        // Ensure CSS is loaded
+        try {
+          var sStylePath = sap.ui.require.toUrl(
+            "com/incresol/zpaymentworkflow/css/style.css",
+          );
+          var oLink = document.createElement("link");
+          oLink.rel = "stylesheet";
+          oLink.type = "text/css";
+          oLink.href = sStylePath;
+          document.head.appendChild(oLink);
+          console.log("Custom CSS loaded from:", sStylePath);
+        } catch (e) {
+          console.warn("Could not load custom CSS:", e);
+          // Fallback: try relative path
+          var oLink2 = document.createElement("link");
+          oLink2.rel = "stylesheet";
+          oLink2.type = "text/css";
+          oLink2.href = "./css/style.css";
+          document.head.appendChild(oLink2);
+        }
+      },
+      _applyVendorColorsToTreeTable: function () {
+        var oTreeTable = this.byId("idTreeTable");
+        if (!oTreeTable) {
+          return;
+        }
 
-  var aRows = oTreeTable.getRows();
+        var aColorClasses = [
+          "vendorColor1",
+          "vendorColor2",
+          "vendorColor3",
+          "vendorColor4",
+          "vendorColor5",
+        ];
 
-  aRows.forEach(
-    function (oRow) {
-      // remove old color classes
-      aColorClasses.forEach(function (sClass) {
-        oRow.removeStyleClass(sClass);
-      });
+        // safety init (in case)
+        this._vendorColorMap = this._vendorColorMap || {};
+        this._vendorColorIndex = this._vendorColorIndex || 0;
 
-      var oCtx = oRow.getBindingContext("treeData");
-      if (!oCtx) {
-        return;
-      }
+        var aRows = oTreeTable.getRows();
 
-      var oObj = oCtx.getObject();
-      if (!oObj) {
-        return;
-      }
+        aRows.forEach(
+          function (oRow) {
+            // remove old color classes
+            aColorClasses.forEach(function (sClass) {
+              oRow.removeStyleClass(sClass);
+            });
 
-      // 🔹 Vendor key (header + item safe)
-      var sVendor =
-        oObj.VendorCode ||
-        oObj.VendorNumber ||
-        (oObj.isHeader && oObj.VendorCode);
-
-      if (!sVendor) {
-        return;
-      }
-
-      // 🔹 Assign color if not yet mapped
-      if (!this._vendorColorMap[sVendor]) {
-        this._vendorColorMap[sVendor] =
-          aColorClasses[this._vendorColorIndex % aColorClasses.length];
-        this._vendorColorIndex++;
-      }
-
-      // 🔹 Apply color
-      oRow.addStyleClass(this._vendorColorMap[sVendor]);
-    }.bind(this),
-  );
-},
-
-
-        _waitForModelAndLoadData: function () {
-            var oModel = this.getView().getModel("oModel");
-
-            if (oModel && oModel.getServiceMetadata()) {
-                // Model is ready, load data immediately
-                console.log("OData model ready, loading data");
-                this._loadPaymentData();
-            } else if (oModel) {
-                // Model exists but metadata not loaded yet
-                console.log("Waiting for OData metadata to load");
-                oModel.attachMetadataLoaded(function () {
-                    console.log("OData metadata loaded, now loading data");
-                    this._loadPaymentData();
-                }.bind(this));
-
-                oModel.attachMetadataFailed(function (oEvent) {
-                    console.error("OData metadata loading failed:", oEvent.getParameters());
-                    MessageToast.show("Failed to load OData metadata");
-                });
-            } else {
-                // Model not available yet, retry after delay
-                console.log("OData model not available, retrying in 1 second");
-                setTimeout(function () {
-                    this._waitForModelAndLoadData();
-                }.bind(this), 1000);
+            var oCtx = oRow.getBindingContext("treeData");
+            if (!oCtx) {
+              return;
             }
-        },
 
-  _loadPaymentData: function () {
-    var oModel = this.getView().getModel("oModel");
+            var oObj = oCtx.getObject();
+            if (!oObj) {
+              return;
+            }
 
-    if (!oModel) {
-        MessageToast.show("OData model 'oModel' not available");
-        return;
-    }
+            // 🔹 Vendor key (header + item safe)
+            var sVendor =
+              oObj.VendorCode ||
+              oObj.VendorNumber ||
+              (oObj.isHeader && oObj.VendorCode);
 
-    oModel.read("/PaymentHeaderSet", {
-        urlParameters: {
-            "$expand": "ToItems"
-        },
+            if (!sVendor) {
+              return;
+            }
 
-        success: function (oData) {
+            // 🔹 Assign color if not yet mapped
+            if (!this._vendorColorMap[sVendor]) {
+              this._vendorColorMap[sVendor] =
+                aColorClasses[this._vendorColorIndex % aColorClasses.length];
+              this._vendorColorIndex++;
+            }
+
+            // 🔹 Apply color
+            oRow.addStyleClass(this._vendorColorMap[sVendor]);
+          }.bind(this),
+        );
+      },
+
+      _waitForModelAndLoadData: function () {
+        var oModel = this.getView().getModel("oModel");
+
+        if (oModel && oModel.getServiceMetadata()) {
+          // Model is ready, load data immediately
+          console.log("OData model ready, loading data");
+          this._loadPaymentData();
+        } else if (oModel) {
+          // Model exists but metadata not loaded yet
+          console.log("Waiting for OData metadata to load");
+          oModel.attachMetadataLoaded(
+            function () {
+              console.log("OData metadata loaded, now loading data");
+              this._loadPaymentData();
+            }.bind(this),
+          );
+
+          oModel.attachMetadataFailed(function (oEvent) {
+            console.error(
+              "OData metadata loading failed:",
+              oEvent.getParameters(),
+            );
+            MessageToast.show("Failed to load OData metadata");
+          });
+        } else {
+          // Model not available yet, retry after delay
+          console.log("OData model not available, retrying in 1 second");
+          setTimeout(
+            function () {
+              this._waitForModelAndLoadData();
+            }.bind(this),
+            1000,
+          );
+        }
+      },
+
+      _loadPaymentData: function () {
+        var oModel = this.getView().getModel("oModel");
+
+        if (!oModel) {
+          MessageToast.show("OData model 'oModel' not available");
+          return;
+        }
+
+        oModel.read("/PaymentHeaderSet", {
+          urlParameters: {
+            $expand: "ToItems",
+          },
+
+          success: function (oData) {
             console.log("PaymentHeaderSet raw response:", oData);
 
-            var aHeaders = (oData && oData.results) ? oData.results : [];
+            var aHeaders = oData && oData.results ? oData.results : [];
             console.log("Total Headers count:", aHeaders.length);
 
             /* ===================================================== */
             /* 🔹 FILTER ITEMS WHERE HOD STATUS = APPROVED          */
             /* ===================================================== */
 
-            var aFilteredHeaders = aHeaders.map(function (oHeader) {
-
-                var aItems = (oHeader.ToItems && oHeader.ToItems.results)
+            var aFilteredHeaders = aHeaders
+              .map(function (oHeader) {
+                var aItems =
+                  oHeader.ToItems && oHeader.ToItems.results
                     ? oHeader.ToItems.results
                     : [];
 
                 // 🔹 Keep only items where HOD Approval Status = APPROVED
                 var aApprovedItems = aItems.filter(function (oItem) {
-                    return oItem.HodApprStatus === "APPROVED";
+                  // 🔹 Store all approval statuses in order
+                  var aStatuses = [
+                    oItem.Pmapprstatus,
+                    oItem.HodApprStatus,
+                    oItem.CfoApprStatus,
+                    oItem.AudApprStatus,
+                    oItem.DirApprStatus,
+                  ];
+
+                  var sLastApprovedStatus = null;
+
+                  // 🔹 Loop to find last approved stage
+                  for (var i = 0; i < aStatuses.length; i++) {
+                    if (aStatuses[i] === "APPROVED") {
+                      sLastApprovedStatus = i; // store index of last approved
+                    }
+                  }
+
+                  // 🔹 If last approved stage is CFO → Skip
+                  // CFO index = 2 (PMA=0, HOD=1, CFO=2)
+                  if (sLastApprovedStatus >= 2) {
+                    return false; // Skip this item
+                  }
+
+                  return true; // Keep other items
                 });
 
                 // 🔹 If no approved items → skip header
                 if (aApprovedItems.length === 0) {
-                    return null;
+                  return null;
                 }
 
                 // 🔹 Return cloned header with only approved items
                 return Object.assign({}, oHeader, {
-                    ToItems: {
-                        results: aApprovedItems
-                    }
+                  ToItems: {
+                    results: aApprovedItems,
+                  },
                 });
+              })
+              .filter(Boolean); // remove null headers
 
-            }).filter(Boolean); // remove null headers
-
-            console.log("Headers with HOD Approved items:", aFilteredHeaders.length);
+            console.log(
+              "Headers with HOD Approved items:",
+              aFilteredHeaders.length,
+            );
 
             /* ===================================================== */
             /* 🔹 IF NO APPROVED RECORDS                             */
             /* ===================================================== */
 
             if (aFilteredHeaders.length === 0) {
-                MessageToast.show("No HOD Approved records found");
-                this.getView().getModel("treeData").setData({ treeData: [] });
-                return;
+              MessageToast.show("No HOD Approved records found");
+              this.getView().getModel("treeData").setData({ treeData: [] });
+              return;
             }
 
             /* ===================================================== */
@@ -409,970 +479,951 @@ _validateUserRole: function () {
             /* ===================================================== */
 
             this._transformExpandedHeaderToTree(aFilteredHeaders);
+          }.bind(this),
 
-        }.bind(this),
-
-        error: function (oError) {
-            console.error("Error loading PaymentHeaderSet with expand:", oError);
+          error: function (oError) {
+            console.error(
+              "Error loading PaymentHeaderSet with expand:",
+              oError,
+            );
             this.getView().getModel("treeData").setData({ treeData: [] });
             MessageToast.show("Error loading payment data");
-        }.bind(this)
-    });
-},
+          }.bind(this),
+        });
+      },
 
-        _transformExpandedHeaderToTree: function (aHeaders) {
-            var aTreeData = aHeaders.map(function (oHeader) {
-                var aItems = (oHeader.ToItems && oHeader.ToItems.results) ? oHeader.ToItems.results : [];
+      _transformExpandedHeaderToTree: function (aHeaders) {
+        var aTreeData = aHeaders.map(function (oHeader) {
+          var aItems =
+            oHeader.ToItems && oHeader.ToItems.results
+              ? oHeader.ToItems.results
+              : [];
 
-                return {
-                    // ===== Header (backend fields) =====
-                    ApprovalNo: oHeader.ApprovalNo,
-                    CreatedOn: oHeader.CreatedOn,
-                    ProfitCenter: oHeader.ProfitCenter,
-                    ProfitCenterName: oHeader.ProfitCenterName,
-                    VendorCode: oHeader.VendorCode,
-                    VendorName: oHeader.VendorName,
-                    CompanyCode: oHeader.CompanyCode,
-                    CreatedBy: oHeader.CreatedBy,
-                    CreatedAt: oHeader.CreationTime,
-                    OverallStatus: oHeader.OverallStatus,
+          return {
+            // ===== Header (backend fields) =====
+            ApprovalNo: oHeader.ApprovalNo,
+            CreatedOn: oHeader.CreatedOn,
+            ProfitCenter: oHeader.ProfitCenter,
+            ProfitCenterName: oHeader.ProfitCenterName,
+            VendorCode: oHeader.VendorCode,
+            VendorName: oHeader.VendorName,
+            CompanyCode: oHeader.CompanyCode,
+            CreatedBy: oHeader.CreatedBy,
+            CreatedAt: oHeader.CreationTime,
+            OverallStatus: oHeader.OverallStatus,
 
-                    // ===== Amounts from backend header =====
-                    TotalBaseAmt: oHeader.BaseAmount,
-                    TotalGstAmt: oHeader.GSTAmount,
-                    TotalTdsAmount: oHeader.TDSAmount,
-                    TotalLiability: oHeader.TotalLiability,
-                    TotalAmtClaimed: oHeader.AmountClaimed,
+            // ===== Amounts from backend header =====
+            TotalBaseAmt: oHeader.BaseAmount,
+            TotalGstAmt: oHeader.GSTAmount,
+            TotalTdsAmount: oHeader.TDSAmount,
+            TotalLiability: oHeader.TotalLiability,
+            TotalAmtClaimed: oHeader.AmountClaimed,
 
-                    ItemCount: aItems.length,
+            ItemCount: aItems.length,
 
-                    isHeader: true,
-                    displayText: "Approval: " + oHeader.ApprovalNo + " - " + (oHeader.VendorName || ""),
-                    Currency: aItems.length > 0 ? aItems[0].Currency : "",
+            isHeader: true,
+            displayText:
+              "Approval: " +
+              oHeader.ApprovalNo +
+              " - " +
+              (oHeader.VendorName || ""),
+            Currency: aItems.length > 0 ? aItems[0].Currency : "",
 
-                    // ===== Children =====
-                    children: aItems.map(function (oItem) {
-                        return Object.assign({}, oItem, {
-                            isHeader: false,
-                            displayText: "Item " + oItem.ItemNum + " - " + (oItem.VendorName || "")
-                        });
-                    })
-                };
-            });
-
-            this.getView().getModel("treeData").setData({ treeData: aTreeData });
-
-            setTimeout(function () {
-                var oTreeTable = this.byId("idTreeTable");
-                if (oTreeTable && aTreeData.length > 0) {
-                    for (var i = 0; i < aTreeData.length; i++) {
-                        oTreeTable.expand(i);
-                    }
-                }
-            }.bind(this), 100);
-        },
-
-        onSwitchShowInLakhsChange: function (oEvent) {
-            var oSwitch = oEvent.getSource();
-            var bState = oSwitch.getState();
-
-            // Update the view state model
-            var oViewStateModel = this.getView().getModel("viewState");
-            oViewStateModel.setProperty("/showInLakhs", bState);
-
-            // Show appropriate message
-            var sMessage = bState ? "Amounts now displayed in Lakhs" : "Amounts now displayed in Rupees";
-            MessageToast.show(sMessage);
-        },
-
-
-_addSelectedFlagToTreeData: function () {
-  var oModel = this.getView().getModel("treeData");
-  var oData = oModel.getData();
-
-  function addFlag(aNodes) {
-    aNodes.forEach(function (oNode) {
-      oNode.selected = false;
-      if (oNode.children && oNode.children.length) {
-        addFlag(oNode.children);
-      }
-    });
-  }
-
-  addFlag(oData.treeData);
-  oModel.setData(oData);
-}
-,
-onSelectCheckBoxTreeTable: function (oEvent) {
-  var oModel = this.getView().getModel("treeData");
-  var sPath = oEvent.getSource().getBindingContext("treeData").getPath();
-  var oNode = oModel.getObject(sPath);
-
-  var oContext = {
-    path: sPath,
-    object: oNode
-  };
-
-  if (oNode.children && oNode.children.length) {
-    // parent node
-    this._selectTopDown(oContext);
-
-    if (!oNode.selected) {
-      this._unselectBottomUp(oContext, sPath);
-    }
-  } else {
-    // leaf node
-    this._unselectBottomUp(oContext, sPath);
-  }
-
-  this._updateBulkSelectionState();
-}
-,
-_selectTopDown: function (oCtx) {
-  var bSelected = oCtx.object.selected;
-  var aChildren = oCtx.object.children;
-
-  aChildren.forEach(function (oChild) {
-    oChild.selected = bSelected;
-
-    if (oChild.children && oChild.children.length) {
-      this._selectTopDown({ object: oChild });
-    }
-  }.bind(this));
-}
-,
-_unselectBottomUp: function (oCtx, sPath) {
-  var oModel = this.getView().getModel("treeData");
-
-  var aPath = sPath.split("/");
-  aPath.pop(); // index
-  aPath.pop(); // children
-  var sParentPath = aPath.join("/");
-
-  var oParent = oModel.getObject(sParentPath);
-  if (!oParent) return;
-
-  if (oParent.selected && !oCtx.object.selected) {
-    oParent.selected = false;
-    this._unselectBottomUp({ object: oParent }, sParentPath);
-  }
-}
-,
-_updateBulkSelectionState: function () {
-  var oModel = this.getView().getModel("treeData");
-  var oViewState = this.getView().getModel("viewState");
-  var iCount = 0;
-
-  function countSelected(aNodes) {
-    aNodes.forEach(function (oNode) {
-      if (!oNode.children && oNode.selected) {
-        iCount++;
-      }
-      if (oNode.children) {
-        countSelected(oNode.children);
-      }
-    });
-  }
-
-  countSelected(oModel.getData().treeData);
-
-  oViewState.setProperty("/selectedCount", iCount);
-  oViewState.setProperty("/showBulkActions", iCount > 0);
-}
-
-
-,
-
-        _updateButtonAnimations: function(bHasSelection) {
-            // Add pulse animation to buttons when items are selected
-            setTimeout(function() {
-                var aApproveButtons = document.querySelectorAll('.approveButton');
-                var aRejectButtons = document.querySelectorAll('.rejectButton');
-                
-                aApproveButtons.forEach(function(oButton) {
-                    if (bHasSelection) {
-                        oButton.classList.add('pulse');
-                        // Remove pulse after 3 seconds
-                        setTimeout(function() {
-                            oButton.classList.remove('pulse');
-                        }, 3000);
-                    } else {
-                        oButton.classList.remove('pulse');
-                    }
-                });
-                
-                aRejectButtons.forEach(function(oButton) {
-                    if (bHasSelection) {
-                        oButton.classList.add('pulse');
-                        // Remove pulse after 3 seconds
-                        setTimeout(function() {
-                            oButton.classList.remove('pulse');
-                        }, 3000);
-                    } else {
-                        oButton.classList.remove('pulse');
-                    }
-                });
-            }, 100);
-        },
-_getSelectedLeafItems: function () {
-  var oData = this.getView().getModel("treeData").getData();
-  var aItems = [];
-
-  function traverse(aNodes) {
-    aNodes.forEach(function (oNode) {
-      if (!oNode.children && oNode.selected) {
-        aItems.push(oNode);
-      }
-      if (oNode.children && oNode.children.length) {
-        traverse(oNode.children);
-      }
-    });
-  }
-
-  traverse(oData.treeData);
-  return aItems;
-},
-onApproveButtonPress: function () {
-  var aSelectedItems = this._getSelectedLeafItems();
-
-  if (!aSelectedItems.length) {
-    sap.m.MessageToast.show("Please select items to approve");
-    return;
-  }
-
-  this._openApprovalDialog(aSelectedItems, "APPROVE");
-}
-,
-onRejectButtonPress: function () {
-  var aSelectedItems = this._getSelectedLeafItems();
-
-  if (!aSelectedItems.length) {
-    sap.m.MessageToast.show("Please select items to reject");
-    return;
-  }
-
-  this._openApprovalDialog(aSelectedItems, "REJECT");
-}
-
-
-,
-        _openApprovalDialog: async function (aSelectedItems, sActionType) {
-            console.log("=== _openApprovalDialog CALLED ===");
-            console.log("Selected Items Count:", aSelectedItems.length);
-            console.log("Action Type:", sActionType);
-            console.log("Selected Items:", aSelectedItems);
-
-            var sDialogTitle = sActionType === "APPROVE" ? "Approve Items" : "Reject Items";
-
-            // 1) Prepare dialog model data
-            var oDialogModel = new sap.ui.model.json.JSONModel({
-                title: sDialogTitle,
-                actionType: sActionType === "APPROVE" ? "Approve" : "Reject",
-                itemCount: aSelectedItems.length,
-                selectedItems: aSelectedItems
-            });
-
-            console.log("Dialog model data:", oDialogModel.getData());
-
-            // 2) Load fragment once
-            if (!this._oApprovalDialog) {
-                console.log("Loading approval dialog fragment...");
-                this._sDialogFragmentId = this.getView().getId() + "--ApprovalDialog"; // IMPORTANT
-                this._oApprovalDialog = await sap.ui.core.Fragment.load({
-                    id: this._sDialogFragmentId,
-                    name: "com.incresol.zpaymentworkflow.view.ApprovalDialog", // <-- CHANGE to your fragment path
-                    controller: this
-                });
-                this.getView().addDependent(this._oApprovalDialog);
-                console.log("Dialog fragment loaded and added as dependent");
-            }
-
-            // 3) Set model on dialog (THIS IS THE KEY)
-            this._oApprovalDialog.setModel(oDialogModel, "dialogModel");
-            console.log("Dialog model set");
-
-            // 4) Store selected items + action in controller for processing
-            this._aDialogSelectedItems = aSelectedItems;
-            this._sDialogActionType = sActionType;
-
-            console.log("Stored dialog data:");
-            console.log("  _aDialogSelectedItems:", this._aDialogSelectedItems);
-            console.log("  _sDialogActionType:", this._sDialogActionType);
-
-            // 5) Open
-            console.log("Opening dialog...");
-            this._oApprovalDialog.open();
-            console.log("Dialog opened");
-        },
-
-
-  handleDialogConfirm: function () {
-    console.log("=== handleDialogConfirm CALLED ===");
-
-    var sActionType = this._sDialogActionType; // "APPROVE" or "REJECT"
-    var aSelectedItems = this._aDialogSelectedItems || [];
-
-    console.log("Dialog Action Type:", sActionType);
-    console.log("Dialog Selected Items:", aSelectedItems);
-    console.log("Dialog Selected Items Count:", aSelectedItems.length);
-
-    /* ================= REJECT VALIDATION ================= */
-    if (sActionType === "REJECT") {
-        console.log("=== VALIDATING HOD REMARKS FOR REJECTION ===");
-
-        var aItemsWithoutRemarks = [];
-
-        aSelectedItems.forEach(function (oItem) {
-            // Validate ONLY leaf items
-            if (!oItem.isHeader) {
-                if (!oItem.HodApprRemarks || oItem.HodApprRemarks.trim() === "") {
-                    aItemsWithoutRemarks.push(oItem);
-                }
-            }
+            // ===== Children =====
+            children: aItems.map(function (oItem) {
+              return Object.assign({}, oItem, {
+                isHeader: false,
+                displayText:
+                  "Item " + oItem.ItemNum + " - " + (oItem.VendorName || ""),
+              });
+            }),
+          };
         });
 
-        // ❌ Block reject if HOD remarks missing
-        if (aItemsWithoutRemarks.length > 0) {
-            console.log("❌ REJECTION BLOCKED - Missing HOD remarks");
+        this.getView().getModel("treeData").setData({ treeData: aTreeData });
+
+        setTimeout(
+          function () {
+            var oTreeTable = this.byId("idTreeTable");
+            if (oTreeTable && aTreeData.length > 0) {
+              for (var i = 0; i < aTreeData.length; i++) {
+                oTreeTable.expand(i);
+              }
+            }
+          }.bind(this),
+          100,
+        );
+      },
+
+      onSwitchShowInLakhsChange: function (oEvent) {
+        var oSwitch = oEvent.getSource();
+        var bState = oSwitch.getState();
+
+        // Update the view state model
+        var oViewStateModel = this.getView().getModel("viewState");
+        oViewStateModel.setProperty("/showInLakhs", bState);
+
+        // Show appropriate message
+        var sMessage = bState
+          ? "Amounts now displayed in Lakhs"
+          : "Amounts now displayed in Rupees";
+        MessageToast.show(sMessage);
+      },
+
+      _addSelectedFlagToTreeData: function () {
+        var oModel = this.getView().getModel("treeData");
+        var oData = oModel.getData();
+
+        function addFlag(aNodes) {
+          aNodes.forEach(function (oNode) {
+            oNode.selected = false;
+            if (oNode.children && oNode.children.length) {
+              addFlag(oNode.children);
+            }
+          });
+        }
+
+        addFlag(oData.treeData);
+        oModel.setData(oData);
+      },
+      onSelectCheckBoxTreeTable: function (oEvent) {
+        var oModel = this.getView().getModel("treeData");
+        var sPath = oEvent.getSource().getBindingContext("treeData").getPath();
+        var oNode = oModel.getObject(sPath);
+
+        var oContext = {
+          path: sPath,
+          object: oNode,
+        };
+
+        if (oNode.children && oNode.children.length) {
+          // parent node
+          this._selectTopDown(oContext);
+
+          if (!oNode.selected) {
+            this._unselectBottomUp(oContext, sPath);
+          }
+        } else {
+          // leaf node
+          this._unselectBottomUp(oContext, sPath);
+        }
+
+        this._updateBulkSelectionState();
+      },
+      _selectTopDown: function (oCtx) {
+        var bSelected = oCtx.object.selected;
+        var aChildren = oCtx.object.children;
+
+        aChildren.forEach(
+          function (oChild) {
+            oChild.selected = bSelected;
+
+            if (oChild.children && oChild.children.length) {
+              this._selectTopDown({ object: oChild });
+            }
+          }.bind(this),
+        );
+      },
+      _unselectBottomUp: function (oCtx, sPath) {
+        var oModel = this.getView().getModel("treeData");
+
+        var aPath = sPath.split("/");
+        aPath.pop(); // index
+        aPath.pop(); // children
+        var sParentPath = aPath.join("/");
+
+        var oParent = oModel.getObject(sParentPath);
+        if (!oParent) return;
+
+        if (oParent.selected && !oCtx.object.selected) {
+          oParent.selected = false;
+          this._unselectBottomUp({ object: oParent }, sParentPath);
+        }
+      },
+      _updateBulkSelectionState: function () {
+        var oModel = this.getView().getModel("treeData");
+        var oViewState = this.getView().getModel("viewState");
+        var iCount = 0;
+
+        function countSelected(aNodes) {
+          aNodes.forEach(function (oNode) {
+            if (!oNode.children && oNode.selected) {
+              iCount++;
+            }
+            if (oNode.children) {
+              countSelected(oNode.children);
+            }
+          });
+        }
+
+        countSelected(oModel.getData().treeData);
+
+        oViewState.setProperty("/selectedCount", iCount);
+        oViewState.setProperty("/showBulkActions", iCount > 0);
+      },
+
+      _updateButtonAnimations: function (bHasSelection) {
+        // Add pulse animation to buttons when items are selected
+        setTimeout(function () {
+          var aApproveButtons = document.querySelectorAll(".approveButton");
+          var aRejectButtons = document.querySelectorAll(".rejectButton");
+
+          aApproveButtons.forEach(function (oButton) {
+            if (bHasSelection) {
+              oButton.classList.add("pulse");
+              // Remove pulse after 3 seconds
+              setTimeout(function () {
+                oButton.classList.remove("pulse");
+              }, 3000);
+            } else {
+              oButton.classList.remove("pulse");
+            }
+          });
+
+          aRejectButtons.forEach(function (oButton) {
+            if (bHasSelection) {
+              oButton.classList.add("pulse");
+              // Remove pulse after 3 seconds
+              setTimeout(function () {
+                oButton.classList.remove("pulse");
+              }, 3000);
+            } else {
+              oButton.classList.remove("pulse");
+            }
+          });
+        }, 100);
+      },
+      _getSelectedLeafItems: function () {
+        var oData = this.getView().getModel("treeData").getData();
+        var aItems = [];
+
+        function traverse(aNodes) {
+          aNodes.forEach(function (oNode) {
+            if (!oNode.children && oNode.selected) {
+              aItems.push(oNode);
+            }
+            if (oNode.children && oNode.children.length) {
+              traverse(oNode.children);
+            }
+          });
+        }
+
+        traverse(oData.treeData);
+        return aItems;
+      },
+      onApproveButtonPress: function () {
+        var aSelectedItems = this._getSelectedLeafItems();
+
+        if (!aSelectedItems.length) {
+          sap.m.MessageToast.show("Please select items to approve");
+          return;
+        }
+
+        this._openApprovalDialog(aSelectedItems, "APPROVE");
+      },
+      onRejectButtonPress: function () {
+        var aSelectedItems = this._getSelectedLeafItems();
+
+        if (!aSelectedItems.length) {
+          sap.m.MessageToast.show("Please select items to reject");
+          return;
+        }
+
+        this._openApprovalDialog(aSelectedItems, "REJECT");
+      },
+
+      _openApprovalDialog: async function (aSelectedItems, sActionType) {
+        console.log("=== _openApprovalDialog CALLED ===");
+        console.log("Selected Items Count:", aSelectedItems.length);
+        console.log("Action Type:", sActionType);
+        console.log("Selected Items:", aSelectedItems);
+
+        var sDialogTitle =
+          sActionType === "APPROVE" ? "Approve Items" : "Reject Items";
+
+        // 1) Prepare dialog model data
+        var oDialogModel = new sap.ui.model.json.JSONModel({
+          title: sDialogTitle,
+          actionType: sActionType === "APPROVE" ? "Approve" : "Reject",
+          itemCount: aSelectedItems.length,
+          selectedItems: aSelectedItems,
+        });
+
+        console.log("Dialog model data:", oDialogModel.getData());
+
+        // 2) Load fragment once
+        if (!this._oApprovalDialog) {
+          console.log("Loading approval dialog fragment...");
+          this._sDialogFragmentId = this.getView().getId() + "--ApprovalDialog"; // IMPORTANT
+          this._oApprovalDialog = await sap.ui.core.Fragment.load({
+            id: this._sDialogFragmentId,
+            name: "com.incresol.zpaymentworkflow.view.ApprovalDialog", // <-- CHANGE to your fragment path
+            controller: this,
+          });
+          this.getView().addDependent(this._oApprovalDialog);
+          console.log("Dialog fragment loaded and added as dependent");
+        }
+
+        // 3) Set model on dialog (THIS IS THE KEY)
+        this._oApprovalDialog.setModel(oDialogModel, "dialogModel");
+        console.log("Dialog model set");
+
+        // 4) Store selected items + action in controller for processing
+        this._aDialogSelectedItems = aSelectedItems;
+        this._sDialogActionType = sActionType;
+
+        console.log("Stored dialog data:");
+        console.log("  _aDialogSelectedItems:", this._aDialogSelectedItems);
+        console.log("  _sDialogActionType:", this._sDialogActionType);
+
+        // 5) Open
+        console.log("Opening dialog...");
+        this._oApprovalDialog.open();
+        console.log("Dialog opened");
+      },
+
+      handleDialogConfirm: function () {
+        console.log("=== handleDialogConfirm CALLED ===");
+
+        var sActionType = this._sDialogActionType; // "APPROVE" or "REJECT"
+        var aSelectedItems = this._aDialogSelectedItems || [];
+
+        console.log("Dialog Action Type:", sActionType);
+        console.log("Dialog Selected Items:", aSelectedItems);
+        console.log("Dialog Selected Items Count:", aSelectedItems.length);
+
+        /* ================= REJECT VALIDATION ================= */
+        if (sActionType === "REJECT") {
+          console.log("=== VALIDATING HOD REMARKS FOR REJECTION ===");
+
+          var aItemsWithoutRemarks = [];
+
+          aSelectedItems.forEach(function (oItem) {
+            // Validate ONLY leaf items
+            if (!oItem.isHeader) {
+              if (!oItem.CfoApprRemarks || oItem.CfoApprRemarks.trim() === "") {
+                aItemsWithoutRemarks.push(oItem);
+              }
+            }
+          });
+
+          // ❌ Block reject if HOD remarks missing
+          if (aItemsWithoutRemarks.length > 0) {
+            console.log("❌ REJECTION BLOCKED - Missing CFO remarks");
 
             var sErrorMessage =
-                "HOD Remarks are mandatory for rejection.\n\n" +
-                "Missing remarks for the following items:\n\n";
+              "CFO Remarks are mandatory for rejection.\n\n" +
+              "Missing remarks for the following items:\n\n";
 
             aItemsWithoutRemarks.forEach(function (oItem, iIndex) {
-                sErrorMessage +=
-                    (iIndex + 1) + ". " +
-                    "Approval: " + oItem.ApprovalNo +
-                    " | Item: " + oItem.ItemNum +
-                    " | inovice no: " + (oItem.DocNum || "") +
-                    "\n";
+              sErrorMessage +=
+                iIndex +
+                1 +
+                ". " +
+                "Approval: " +
+                oItem.ApprovalNo +
+                " | Item: " +
+                oItem.ItemNum +
+                " | inovice no: " +
+                (oItem.DocNum || "") +
+                "\n";
             });
 
             sap.m.MessageBox.error(sErrorMessage, {
-                title: "HOD Remarks Required"
+              title: "HOD Remarks Required",
             });
 
             // ⛔ Do NOT close dialog
             return;
+          }
+
+          console.log("✅ All selected items have HOD remarks");
         }
 
-        console.log("✅ All selected items have HOD remarks");
-    }
+        /* ================= PROCEED ================= */
+        console.log("=== CLOSING DIALOG ===");
+        this._oApprovalDialog.close();
 
-    /* ================= PROCEED ================= */
-    console.log("=== CLOSING DIALOG ===");
-    this._oApprovalDialog.close();
+        console.log("=== CALLING _processBulkAction ===");
+        this._processBulkAction(aSelectedItems, sActionType);
+      },
 
-    console.log("=== CALLING _processBulkAction ===");
-    this._processBulkAction(aSelectedItems, sActionType);
-}
+      handleDialogCancel: function () {
+        console.log("=== handleDialogCancel CALLED ===");
+        if (this._oApprovalDialog) {
+          this._oApprovalDialog.close();
+        }
+      },
 
-,
+      onDialogAfterClose: function () {
+        console.log("=== onDialogAfterClose CALLED ===");
+        // Optional cleanup - dialog closed
+      },
+      onOpenColumnSettings: function () {
+        if (!this._oColumnDialog) {
+          this._oColumnDialog = sap.ui.xmlfragment(
+            "com.incresol.zpaymentworkflow.view.ColumnSettings",
+            this,
+          );
+          this.getView().addDependent(this._oColumnDialog);
+        }
+        this._oColumnDialog.open();
+      },
 
+      onApplyColumnSettings: function () {
+        // this._applyColumnsOnly(); // apply immediately
 
-        handleDialogCancel: function () {
-            console.log("=== handleDialogCancel CALLED ===");
-            if (this._oApprovalDialog) {
-                this._oApprovalDialog.close();
-            }
-        },
-
-        onDialogAfterClose: function () {
-            console.log("=== onDialogAfterClose CALLED ===");
-            // Optional cleanup - dialog closed
-        },
-         onOpenColumnSettings: function () {
-            if (!this._oColumnDialog) {
-                this._oColumnDialog = sap.ui.xmlfragment(
-                    "com.incresol.zpaymentworkflow.view.ColumnSettings",
-                    this
-                );
-                this.getView().addDependent(this._oColumnDialog);
-            }
-            this._oColumnDialog.open();
-
-        },
-
-onApplyColumnSettings: function () {
-    // this._applyColumnsOnly(); // apply immediately
-
-    if (!this._oSaveLayoutDialog) {
-        this._oSaveLayoutDialog = sap.ui.xmlfragment(
+        if (!this._oSaveLayoutDialog) {
+          this._oSaveLayoutDialog = sap.ui.xmlfragment(
             "com.incresol.zpaymentworkflow.view.SaveLayoutDialog",
-            this
-        );
-        this.getView().addDependent(this._oSaveLayoutDialog);
-    }
-
-    // Reset dialog state
-    sap.ui.getCore().byId("idConfirmBox").setVisible(true);
-    sap.ui.getCore().byId("idInputBox").setVisible(false);
-    sap.ui.getCore().byId("idLayoutNameInput").setValue("");
-
-    this._oSaveLayoutDialog.open();
-},
-_applyColumnsOnly: function () {
-    const oTable = this.byId("idTreeTable");
-    const aColumns = this.getView().getModel("columnModel").getProperty("/columns");
-
-    oTable.getColumns().forEach(col => col.setVisible(false));
-
-    aColumns.forEach(col => {
-        const oCol = this.byId(col.id);
-        if (oCol) {
-            oCol.setVisible(col.visible);
+            this,
+          );
+          this.getView().addDependent(this._oSaveLayoutDialog);
         }
-    });
-},
 
+        // Reset dialog state
+        sap.ui.getCore().byId("idConfirmBox").setVisible(true);
+        sap.ui.getCore().byId("idInputBox").setVisible(false);
+        sap.ui.getCore().byId("idLayoutNameInput").setValue("");
 
-onSkipSaveLayout: function () {
-    const oTable = this.byId("idTreeTable");
-            const aColumns = this.getView().getModel("columnModel").getProperty("/columns");
+        this._oSaveLayoutDialog.open();
+      },
+      _applyColumnsOnly: function () {
+        const oTable = this.byId("idTreeTable");
+        const aColumns = this.getView()
+          .getModel("columnModel")
+          .getProperty("/columns");
 
-            aColumns.forEach(col => {
-                const oColumn = this.byId(col.id);
-                if (oColumn) {
-                    oColumn.setVisible(col.visible);
-                }
-            });
+        oTable.getColumns().forEach((col) => col.setVisible(false));
 
-            this._oColumnDialog.close();
-            console.log("Applied column settings:", aColumns);
-    this._oSaveLayoutDialog.close();
-    sap.m.MessageToast.show("Layout applied locally");
-},
-onConfirmSaveLayout: function () {
-    var oModel = this.getView().getModel("oModel");
+        aColumns.forEach((col) => {
+          const oCol = this.byId(col.id);
+          if (oCol) {
+            oCol.setVisible(col.visible);
+          }
+        });
+      },
 
-    if (!this._oLayoutNameDialog) {
+      onSkipSaveLayout: function () {
+        const oTable = this.byId("idTreeTable");
+        const aColumns = this.getView()
+          .getModel("columnModel")
+          .getProperty("/columns");
 
-        this._oLayoutNameInput = new sap.m.Input({
-            placeholder: "Enter layout name",
-            liveChange: function (oEvent) {
-                var sValue = oEvent.getParameter("value");
-                this._oLayoutSaveBtn.setEnabled(!!sValue.trim());
-            }.bind(this)
+        aColumns.forEach((col) => {
+          const oColumn = this.byId(col.id);
+          if (oColumn) {
+            oColumn.setVisible(col.visible);
+          }
         });
 
-        this._oLayoutSaveBtn = new sap.m.Button({
+        this._oColumnDialog.close();
+        console.log("Applied column settings:", aColumns);
+        this._oSaveLayoutDialog.close();
+        sap.m.MessageToast.show("Layout applied locally");
+      },
+      onConfirmSaveLayout: function () {
+        var oModel = this.getView().getModel("oModel");
+
+        if (!this._oLayoutNameDialog) {
+          this._oLayoutNameInput = new sap.m.Input({
+            placeholder: "Enter layout name",
+            liveChange: function (oEvent) {
+              var sValue = oEvent.getParameter("value");
+              this._oLayoutSaveBtn.setEnabled(!!sValue.trim());
+            }.bind(this),
+          });
+
+          this._oLayoutSaveBtn = new sap.m.Button({
             text: "Save",
             type: "Emphasized",
             enabled: false,
             press: function () {
+              /* ===== 1. Layout Name ===== */
+              var sLayoutName = this._oLayoutNameInput.getValue().trim();
+              if (!sLayoutName) {
+                sap.m.MessageToast.show("Please enter layout name");
+                return;
+              }
 
-                /* ===== 1. Layout Name ===== */
-                var sLayoutName = this._oLayoutNameInput.getValue().trim();
-                if (!sLayoutName) {
-                    sap.m.MessageToast.show("Please enter layout name");
-                    return;
-                }
+              /* ===== 2. Column Model ===== */
+              var aColumns =
+                this.getView()
+                  .getModel("columnModel")
+                  .getProperty("/columns") || [];
 
-                /* ===== 2. Column Model ===== */
-                var aColumns = this.getView()
-                    .getModel("columnModel")
-                    .getProperty("/columns") || [];
+              /* ===== 3. Column → Backend Field Map ===== */
+              var mFieldMap = this._getColumnFieldMap();
+              var sUserId = this.getView()
+                .getModel("localUser")
+                .getProperty("/UserName");
 
-                /* ===== 3. Column → Backend Field Map ===== */
-                var mFieldMap = this._getColumnFieldMap();
+              /* ===== 4. Base Payload (ALL FIELDS) ===== */
+              var oPayload = {
+                UserId: "sUserId", // replace with actual user ID
+                LayoutName: sLayoutName.toUpperCase(),
 
-                /* ===== 4. Base Payload (ALL FIELDS) ===== */
-                var oPayload = {
-                    UserId: "INCRESOL",
-                    LayoutName: sLayoutName.toUpperCase(),
-
-                    ApprovalNo:"X",
+                ApprovalNo: "X",
                 ProfitCenter: "X",
-                    ProfitCenterName: "X",
-                    VendorCode: "X",
-                    VendorName: "",
-                    CompanyCode: "",
-                    CreationTime: "",
-                    CreatedOn: "",
-                    CreatedBy: "",
-                    OverallStatus: "",
-                    DocNum: "",
-                    ItemNum: "",
-                    LiabHead: "",
-                    ReferenceDoc: "",
-                    PurchDoc: "",
-                    DocDate: "",
-                    PostingDt: "",
-                    GrossAmt: "",
-                    BaseAmt: "",
-                    GstAmt: "",
-                    TdsAmount: "",
-                    TotalLiability: "",
-                    Gst2aRef: "",
-                    Gst2aNref: "",
-                    AmtClaimed: "",
-                    AprnoRef: "",
-                    ProposedAmt: "",
-                    Currency: "",
-                    TaxNum: "",
-                    Gstr1Details: "",
-                    Remark: "",
-                    AccountHolder: "",
-                    AccountNumber: "",
-                    BankName: "",
-                    Branch: "",
-                    BankKey: "",
-                    PmApprAmt: "",
-                    PmUserId: "",
-                    PmApprStatus: "",
-                    PmApprOn: "",
-                    PmApprRemarks: "",
-                    HodApprAmt: "",
-                    HodUserId: "",
-                    HodApprStatus: "",
-                    HodApprOn: "",
-                    HodApprRemarks: "",
-                    CfoApprAmt: "",
-                    CfoUserId: "",
-                    CfoApprStatus: "",
-                    CfoApprOn: "",
-                    CfoApprRemarks: "",
-                    AudApprAmt: "",
-                    AudUserId: "",
-                    AudApprStatus: "",
-                    AudApprOn: "",
-                    AudApprRemarks: "",
-                    DirApprAmt: "",
-                    DirUserId: "",
-                    DirApprStatus: "",
-                    DirApprOn: "",
-                    DirApprRemarks: "",
-                    ModeOfPayment: "",
-                    UtrNo: "",
-                    PaidAmount1: "",
-                    PaymentDate1: "",
-                    PaidAmount2: "",
-                    PaymentDate2: "",
-                    TotalBalOut: "",
-                    BalancePayable: ""
-                };
+                ProfitCenterName: "X",
+                VendorCode: "X",
+                VendorName: "",
+                CompanyCode: "",
+                CreationTime: "",
+                CreatedOn: "",
+                CreatedBy: "",
+                OverallStatus: "",
+                DocNum: "",
+                ItemNum: "",
+                LiabHead: "",
+                ReferenceDoc: "",
+                PurchDoc: "",
+                DocDate: "",
+                PostingDt: "",
+                GrossAmt: "",
+                BaseAmt: "",
+                GstAmt: "",
+                TdsAmount: "",
+                TotalLiability: "",
+                Gst2aRef: "",
+                Gst2aNref: "",
+                AmtClaimed: "",
+                AprnoRef: "",
+                ProposedAmt: "",
+                Currency: "",
+                TaxNum: "",
+                Gstr1Details: "",
+                Remark: "",
+                AccountHolder: "",
+                AccountNumber: "",
+                BankName: "",
+                Branch: "",
+                BankKey: "",
+                PmApprAmt: "",
+                PmUserId: "",
+                PmApprStatus: "",
+                PmApprOn: "",
+                PmApprRemarks: "",
+                HodApprAmt: "",
+                HodUserId: "",
+                HodApprStatus: "",
+                HodApprOn: "",
+                HodApprRemarks: "",
+                CfoApprAmt: "",
+                CfoUserId: "",
+                CfoApprStatus: "",
+                CfoApprOn: "",
+                CfoApprRemarks: "",
+                AudApprAmt: "",
+                AudUserId: "",
+                AudApprStatus: "",
+                AudApprOn: "",
+                AudApprRemarks: "",
+                DirApprAmt: "",
+                DirUserId: "",
+                DirApprStatus: "",
+                DirApprOn: "",
+                DirApprRemarks: "",
+                ModeOfPayment: "",
+                TotalBalOut: "",
+                BalancePayable: "",
+              };
 
-                /* ===== 5. Fill X / "" based on visibility ===== */
-                aColumns.forEach(function (col) {
-                    var sBackendField = mFieldMap[col.id];
-                    if (sBackendField && oPayload.hasOwnProperty(sBackendField)) {
-                        oPayload[sBackendField] = col.visible ? "X" : "";
-                    }
-                });
+              /* ===== 5. Fill X / "" based on visibility ===== */
+              aColumns.forEach(function (col) {
+                var sBackendField = mFieldMap[col.id];
+                if (sBackendField && oPayload.hasOwnProperty(sBackendField)) {
+                  oPayload[sBackendField] = col.visible ? "X" : "";
+                }
+              });
 
-                console.log("Final UserLayoutParametersSet Payload:", oPayload);
+              console.log("Final UserLayoutParametersSet Payload:", oPayload);
 
-                /* ===== 6. OData CREATE ===== */
-                // var oModel = this.getView().getModel("odataModel");
-                console.log("Using OData model 😊😊😊😊😊😊😊😊😊:", oModel);
+              /* ===== 6. OData CREATE ===== */
+              // var oModel = this.getView().getModel("odataModel");
+              console.log("Using OData model 😊😊😊😊😊😊😊😊😊:", oModel);
 
-                oModel.create("/UserLayoutParametersSet", oPayload, {
-                    success: function () {
+              oModel.create("/UserLayoutParametersSet", oPayload, {
+                success: function () {
+                  if (this._oColumnDialog) {
+                    this._oColumnDialog.close();
+                  }
+                  if (this._oSaveLayoutDialog) {
+                    this._oSaveLayoutDialog.close();
+                  }
 
-                        if (this._oColumnDialog) {
-                            this._oColumnDialog.close();
-                        }
-                        if (this._oSaveLayoutDialog) {
-                            this._oSaveLayoutDialog.close();
-                        }
+                  this._oLayoutNameDialog.close();
 
-                        this._oLayoutNameDialog.close();
+                  sap.m.MessageToast.show(sLayoutName + " layout is saved");
+                }.bind(this),
+                error: function (oError) {
+                  sap.m.MessageToast.show("Failed to save layout");
+                  console.error("Layout save error", oError);
+                },
+              });
+            }.bind(this),
+          });
 
-                        sap.m.MessageToast.show(sLayoutName + " layout is saved");
-
-                    }.bind(this),
-                    error: function (oError) {
-                        sap.m.MessageToast.show("Failed to save layout");
-                        console.error("Layout save error", oError);
-                    }
-                });
-
-            }.bind(this)
-        });
-
-        this._oLayoutNameDialog = new sap.m.Dialog({
+          this._oLayoutNameDialog = new sap.m.Dialog({
             title: "Save Layout",
             contentWidth: "400px",
             content: [
-                new sap.m.Label({
-                    text: "Layout Name",
-                    labelFor: this._oLayoutNameInput
-                }),
-                this._oLayoutNameInput
+              new sap.m.Label({
+                text: "Layout Name",
+                labelFor: this._oLayoutNameInput,
+              }),
+              this._oLayoutNameInput,
             ],
             beginButton: this._oLayoutSaveBtn,
             endButton: new sap.m.Button({
-                text: "Cancel",
-                press: function () {
-                    this._oLayoutNameDialog.close();
-                }.bind(this)
+              text: "Cancel",
+              press: function () {
+                this._oLayoutNameDialog.close();
+              }.bind(this),
             }),
             afterClose: function () {
-                this._oLayoutNameInput.setValue("");
-                this._oLayoutSaveBtn.setEnabled(false);
-            }.bind(this)
-        });
+              this._oLayoutNameInput.setValue("");
+              this._oLayoutSaveBtn.setEnabled(false);
+            }.bind(this),
+          });
 
-        this.getView().addDependent(this._oLayoutNameDialog);
-    }
+          this.getView().addDependent(this._oLayoutNameDialog);
+        }
 
-    this._oLayoutNameDialog.open();
-}
+        this._oLayoutNameDialog.open();
+      },
 
+      _getColumnFieldMap: function () {
+        return {
+          /* ===== HEADER LEVEL ===== */
+          idColApprovalNoteNo: "ApprovalNo",
+          colDate: "CreatedOn",
+          colProfitCenter: "ProfitCenter",
+          colProfitCente: "ProfitCenterName",
+          colCompanyCode: "CompanyCode",
+          colCreatedBy: "CreatedBy",
+          colCreationTime: "CreationTime",
+          colItemCount: "ItemNum",
 
+          /* ===== VENDOR / BASIC ===== */
+          colVendorCode: "VendorCode",
+          colVendorName: "VendorName",
 
+          /* ===== DOCUMENT DETAILS ===== */
+          colDocumentNumber: "DocNum",
+          colInvoiceNo: "DocNum",
+          colPurchaseOrder: "PurchDoc",
+          colDocumentDate: "DocDate",
+          colPostingDate: "PostingDt",
+          colReferenceDocument: "ReferenceDoc",
 
-,
-_getColumnFieldMap: function () {
-    return {
-        /* ===== HEADER LEVEL ===== */
-        idColApprovalNoteNo: "ApprovalNo",
-        colDate: "CreatedOn",
-        colProfitCenter: "ProfitCenter",
-        colProfitCente: "ProfitCenterName",
-        colCompanyCode: "CompanyCode",
-        colCreatedBy: "CreatedBy",
-        colCreationTime: "CreationTime",
-        colItemCount: "ItemNum",
+          /* ===== LIABILITY / TAX ===== */
+          colLiabilityHead: "LiabHead",
+          colTaxNumber: "TaxNum",
+          colGstr1Details: "Gstr1Details",
 
-        /* ===== VENDOR / BASIC ===== */
-        colVendorCode: "VendorCode",
-        colVendorName: "VendorName",
+          /* ===== AMOUNTS ===== */
+          colGrossAmt: "GrossAmt",
+          colGST: "GstAmt",
+          colTDS: "TdsAmount",
+          colTotalLiability: "TotalLiability",
+          colAmtClaimed: "AmtClaimed",
+          colAmtAlreadyClaimed: "AmtClaimed",
+          colAmtProposed: "ProposedAmt",
+          colGst2aRef: "Gst2aRef",
+          colGst2aNref: "Gst2aNref",
 
-        /* ===== DOCUMENT DETAILS ===== */
-        colDocumentNumber: "DocNum",
-        colInvoiceNo: "DocNum",
-        colPurchaseOrder: "PurchDoc",
-        colDocumentDate: "DocDate",
-        colPostingDate: "PostingDt",
-        colReferenceDocument: "ReferenceDoc",
+          /* ===== PM / APPROVAL ===== */
+          colPmApprAmt: "PmApprAmt",
+          colPmStatus: "PmApprStatus",
+          colPmRemark: "PmApprRemarks",
 
-        /* ===== LIABILITY / TAX ===== */
-        colLiabilityHead: "LiabHead",
-        colTaxNumber: "TaxNum",
-        colGstr1Details: "Gstr1Details",
+          /* ===== BANK DETAILS ===== */
+          colBankName: "BankName",
+          colAccountNumber: "AccountNumber",
+          colAccountHolder: "AccountHolder",
+          colBankKey: "BankKey",
 
-        /* ===== AMOUNTS ===== */
-        colGrossAmt: "GrossAmt",
-        colGST: "GstAmt",
-        colTDS: "TdsAmount",
-        colTotalLiability: "TotalLiability",
-        colAmtClaimed: "AmtClaimed",
-        colAmtAlreadyClaimed: "AmtClaimed",
-        colAmtProposed: "ProposedAmt",
-        colGst2aRef: "Gst2aRef",
-        colGst2aNref: "Gst2aNref",
+          /* ===== CURRENCY ===== */
+          colCurrency: "Currency",
 
-        /* ===== PM / APPROVAL ===== */
-        colPmApprAmt: "PmApprAmt",
-        colPmStatus: "PmApprStatus",
-        colPmRemark: "PmApprRemarks",
+          /* ===== GENERAL ===== */
+          colGeneralRemark: "Remark",
 
-        /* ===== BANK DETAILS ===== */
-        colBankName: "BankName",
-        colAccountNumber: "AccountNumber",
-        colAccountHolder: "AccountHolder",
-        colBankKey: "BankKey",
+          /* ===== TOTALS ===== */
+          colTotalLiability: "TotalLiability",
+        };
+      },
+      onCloseColumnSettings: function () {
+        this._oColumnDialog.close();
+      },
+      /* ===================================================== */
+      /* =============== SELECT LAYOUT LOGIC ================= */
+      /* ===================================================== */
 
-        /* ===== CURRENCY ===== */
-        colCurrency: "Currency",
-
-        /* ===== GENERAL ===== */
-        colGeneralRemark: "Remark",
-
-        /* ===== TOTALS ===== */
-        colTotalLiability: "TotalLiability"
-    };
-}
-,
-
-
-
-
-
-        onCloseColumnSettings: function () {
-            this._oColumnDialog.close();
-        },
-        /* ===================================================== */
-/* =============== SELECT LAYOUT LOGIC ================= */
-/* ===================================================== */
-
-
-
-onOpenLayoutDialog: function () {
-
-    if (!this._oLayoutDialog) {
-        this._oLayoutDialog = sap.ui.xmlfragment(
+      onOpenLayoutDialog: function () {
+        if (!this._oLayoutDialog) {
+          this._oLayoutDialog = sap.ui.xmlfragment(
             this.getView().getId(),
             "com.incresol.zpaymentworkflow.view.LayoutDialog",
-            this
-        );
-        this.getView().addDependent(this._oLayoutDialog);
-    }
+            this,
+          );
+          this.getView().addDependent(this._oLayoutDialog);
+        }
 
-    var oModel = this.getView().getModel("oModel");
+        var oModel = this.getView().getModel("oModel");
 
-    oModel.read("/UserLayoutParametersSet", {
-        success: function (oData) {
+        // 🔹 Get Logged-in User
+        var sUserId = this.getView()
+          .getModel("localUser")
+          .getProperty("/UserName");
+
+        oModel.read("/UserLayoutParametersSet", {
+          success: function (oData) {
+            var sUserName = oData.results[0].UserName;
 
             var aLayouts = [];
 
             // 🔹 1️⃣ MANUAL DEFAULT ROW (ALWAYS FIRST)
             aLayouts.push({
-                id: "DEFAULT",
-                name: "Default",
-                isDefault: true,
-                isManual: true   // helpful flag
+              id: "DEFAULT",
+              name: "Default",
+              isDefault: true,
+              isManual: true,
             });
 
-            // 🔹 2️⃣ BACKEND LAYOUTS
+            // 🔹 2️⃣ FILTER BY USERNAME
             (oData.results || []).forEach(function (oItem) {
+              if (oItem.UserId === sUserId) {
+                // 🔹 USER CHECK
+
                 aLayouts.push({
-                    id: oItem.LayoutName,
-                    name: oItem.LayoutName,
-                    isDefault: false,
-                    isManual: false
+                  id: oItem.LayoutName,
+                  name: oItem.LayoutName,
+                  isDefault: false,
+                  isManual: false,
                 });
+              }
             });
 
             var oLayoutModel = new sap.ui.model.json.JSONModel({
-                layouts: aLayouts
+              layouts: aLayouts,
             });
 
             this.getView().setModel(oLayoutModel, "layoutModel");
 
-            // 🔹 Preselect Default row
-            var oTable = sap.ui.getCore().byId(
-                this.getView().getId() + "--layoutTable"
-            );
+            var oTable = sap.ui
+              .getCore()
+              .byId(this.getView().getId() + "--layoutTable");
 
-            if (oTable) {
-                oTable.setSelectedItem(oTable.getItems()[0]);
+            if (oTable && oTable.getItems().length > 0) {
+              oTable.setSelectedItem(oTable.getItems()[0]);
             }
 
             this._oLayoutDialog.open();
+          }.bind(this),
 
-        }.bind(this),
-
-        error: function () {
+          error: function () {
             sap.m.MessageToast.show("Failed to load layouts");
+          },
+        });
+      },
+
+      onLayoutSelectionChange: function (oEvent) {
+        var oSelectedItem = oEvent.getParameter("listItem");
+        if (!oSelectedItem) {
+          return;
         }
-    });
-}
 
+        var oCtx = oSelectedItem.getBindingContext("layoutModel");
+        if (!oCtx) {
+          return;
+        }
 
+        var oSelectedObj = oCtx.getObject();
+        var sSelectedLayoutName = oSelectedObj.name;
 
-,
+        /* ===================================================== */
+        /* =============== DEFAULT OPTION ====================== */
+        /* ===================================================== */
+        if (oSelectedObj.isDefault) {
+          // mark default selected
+          this._isDefaultLayoutSelected = true;
+          this._selectedBackendLayout = null;
 
-onLayoutSelectionChange: function (oEvent) {
-
-    var oSelectedItem = oEvent.getParameter("listItem");
-    if (!oSelectedItem) {
-        return;
-    }
-
-    var oCtx = oSelectedItem.getBindingContext("layoutModel");
-    if (!oCtx) {
-        return;
-    }
-
-    var oSelectedObj = oCtx.getObject();
-    var sSelectedLayoutName = oSelectedObj.name;
-    
-
-    /* ===================================================== */
-    /* =============== DEFAULT OPTION ====================== */
-    /* ===================================================== */
-    if (oSelectedObj.isDefault) {
-
-        // mark default selected
-        this._isDefaultLayoutSelected = true;
-        this._selectedBackendLayout = null;
-
-        const aColumns = this.getView()
+          const aColumns = this.getView()
             .getModel("columnModel")
             .getProperty("/columns");
 
-        // apply default (local) visibility
-        aColumns.forEach(function (col) {
-            var oColumn = this.byId(col.id);
-            if (oColumn) {
+          // apply default (local) visibility
+          aColumns.forEach(
+            function (col) {
+              var oColumn = this.byId(col.id);
+              if (oColumn) {
                 oColumn.setVisible(col.visible);
-            }
-        }.bind(this));
+              }
+            }.bind(this),
+          );
 
-        console.log("Applied DEFAULT layout locally:", aColumns);
-        sap.m.MessageToast.show("Default layout selected");
+          console.log("Applied DEFAULT layout locally:", aColumns);
+          sap.m.MessageToast.show("Default layout selected");
 
-        return; // ⛔ stop backend call
-    }
+          return; // ⛔ stop backend call
+        }
 
-    /* ===================================================== */
-    /* =============== BACKEND LAYOUT ====================== */
-    /* ===================================================== */
+        /* ===================================================== */
+        /* =============== BACKEND LAYOUT ====================== */
+        /* ===================================================== */
 
-    this._isDefaultLayoutSelected = false;
+        this._isDefaultLayoutSelected = false;
 
-    var oModel = this.getView().getModel("oModel");
+        var oModel = this.getView().getModel("oModel");
 
-    oModel.read("/UserLayoutParametersSet", {
-        success: function (oData) {
-
+        oModel.read("/UserLayoutParametersSet", {
+          success: function (oData) {
             var oLayout = (oData.results || []).find(function (oItem) {
-                return oItem.LayoutName === sSelectedLayoutName;
+              return oItem.LayoutName === sSelectedLayoutName;
             });
 
             if (!oLayout) {
-                sap.m.MessageToast.show("Layout not found");
-                return;
+              sap.m.MessageToast.show("Layout not found");
+              return;
             }
 
             console.log("Layout rules (visibility only):", oLayout);
 
             // store backend layout for Apply
             this._selectedBackendLayout = oLayout;
+          }.bind(this),
 
-        }.bind(this),
-
-        error: function () {
+          error: function () {
             sap.m.MessageToast.show("Failed to load layout");
+          },
+        });
+      },
+
+      _applyBackendLayoutToTreeTable: function (oLayoutData) {
+        var oTreeTable = this.byId("idTreeTable");
+        if (!oTreeTable || !oLayoutData) {
+          return;
         }
-    });
-}
 
-,
-_applyBackendLayoutToTreeTable: function (oLayoutData) {
+        var mFieldMap = this._getColumnFieldMap();
 
-    var oTreeTable = this.byId("idTreeTable");
-    if (!oTreeTable || !oLayoutData) {
-        return;
-    }
-
-    var mFieldMap = this._getColumnFieldMap();
-
-    // 🔹 Hide all mapped columns first
-    oTreeTable.getColumns().forEach(function (oColumn) {
-        var sColumnId = oColumn.getId().split("--").pop();
-        if (mFieldMap[sColumnId]) {
+        // 🔹 Hide all mapped columns first
+        oTreeTable.getColumns().forEach(function (oColumn) {
+          var sColumnId = oColumn.getId().split("--").pop();
+          if (mFieldMap[sColumnId]) {
             oColumn.setVisible(false);
-        }
-    });
+          }
+        });
 
-    // 🔹 Apply backend visibility
-    oTreeTable.getColumns().forEach(function (oColumn) {
-        var sColumnId = oColumn.getId().split("--").pop();
-        var sBackendField = mFieldMap[sColumnId];
+        // 🔹 Apply backend visibility
+        oTreeTable.getColumns().forEach(function (oColumn) {
+          var sColumnId = oColumn.getId().split("--").pop();
+          var sBackendField = mFieldMap[sColumnId];
 
-        if (!sBackendField) {
+          if (!sBackendField) {
             return;
-        }
+          }
 
-        oColumn.setVisible(oLayoutData[sBackendField] === "X");
-    });
-}
+          oColumn.setVisible(oLayoutData[sBackendField] === "X");
+        });
+      },
 
-,
-
-onApplyLayout: function () {
-
-    /* ===================================================== */
-    /* =============== DEFAULT LAYOUT ====================== */
-    /* ===================================================== */
-    if (this._isDefaultLayoutSelected) {
-
-        if (!this._defaultLayoutColumns) {
+      onApplyLayout: function () {
+        /* ===================================================== */
+        /* =============== DEFAULT LAYOUT ====================== */
+        /* ===================================================== */
+        if (this._isDefaultLayoutSelected) {
+          if (!this._defaultLayoutColumns) {
             sap.m.MessageToast.show("Default layout not available");
             return;
+          }
+
+          this._defaultLayoutColumns.forEach(
+            function (col) {
+              var oColumn = this.byId(col.id);
+              if (oColumn) {
+                oColumn.setVisible(col.visible);
+              }
+            }.bind(this),
+          );
+
+          sap.m.MessageToast.show("Default layout applied");
+
+          if (this._oLayoutDialog) {
+            this._oLayoutDialog.close();
+          }
+
+          return;
         }
 
-        this._defaultLayoutColumns.forEach(function (col) {
-            var oColumn = this.byId(col.id);
-            if (oColumn) {
-                oColumn.setVisible(col.visible);
-            }
-        }.bind(this));
+        /* ===================================================== */
+        /* =============== BACKEND LAYOUT ====================== */
+        /* ===================================================== */
+        if (!this._selectedBackendLayout) {
+          sap.m.MessageToast.show("Please select a layout");
+          return;
+        }
 
-        sap.m.MessageToast.show("Default layout applied");
+        this._applyBackendLayoutToTreeTable(this._selectedBackendLayout);
+
+        sap.m.MessageToast.show(
+          "Layout applied: " + this._selectedBackendLayout.LayoutName,
+        );
 
         if (this._oLayoutDialog) {
-            this._oLayoutDialog.close();
+          this._oLayoutDialog.close();
+        }
+      },
+
+      onCloseLayoutDialog: function () {
+        if (this._oLayoutDialog) {
+          this._oLayoutDialog.close();
+        }
+      },
+      _captureDefaultLayout: function () {
+        var oTreeTable = this.byId("idTreeTable");
+        if (!oTreeTable) {
+          return;
         }
 
-        return;
-    }
+        this._defaultLayoutColumns = oTreeTable
+          .getColumns()
+          .map(function (oColumn) {
+            return {
+              id: oColumn.getId().split("--").pop(),
+              visible: oColumn.getVisible(),
+            };
+          });
 
-    /* ===================================================== */
-    /* =============== BACKEND LAYOUT ====================== */
-    /* ===================================================== */
-    if (!this._selectedBackendLayout) {
-        sap.m.MessageToast.show("Please select a layout");
-        return;
-    }
+        console.log("📌 Default layout captured:", this._defaultLayoutColumns);
+      },
 
-    this._applyBackendLayoutToTreeTable(this._selectedBackendLayout);
+      onDeleteLayout: function (oEvent) {
+        // 1️⃣ Get clicked row
+        var oButton = oEvent.getSource();
+        var oRow = oButton.getParent(); // ColumnListItem
+        var oCtx = oRow.getBindingContext("layoutModel");
 
-    sap.m.MessageToast.show(
-        "Layout applied: " + this._selectedBackendLayout.LayoutName
-    );
+        if (!oCtx) {
+          return;
+        }
 
-    if (this._oLayoutDialog) {
-        this._oLayoutDialog.close();
-    }
-}
+        // 2️⃣ Get layout data
+        var oLayout = oCtx.getObject();
+        var sLayoutName = oLayout.name;
 
+        var oView = this.getView();
+        var oODataModel = oView.getModel("oModel");
 
-
-
-,
-
-onCloseLayoutDialog: function () {
-    if (this._oLayoutDialog) {
-        this._oLayoutDialog.close();
-    }
-}
-,
-_captureDefaultLayout: function () {
-    var oTreeTable = this.byId("idTreeTable");
-    if (!oTreeTable) {
-        return;
-    }
-
-    this._defaultLayoutColumns = oTreeTable.getColumns().map(function (oColumn) {
-        return {
-            id: oColumn.getId().split("--").pop(),
-            visible: oColumn.getVisible()
-        };
-    });
-
-    console.log("📌 Default layout captured:", this._defaultLayoutColumns);
-}
-
-,
-onDeleteLayout: function (oEvent) {
-
-    // 1️⃣ Get clicked row
-    var oButton = oEvent.getSource();
-    var oRow = oButton.getParent(); // ColumnListItem
-    var oCtx = oRow.getBindingContext("layoutModel");
-
-    if (!oCtx) {
-        return;
-    }
-
-    // 2️⃣ Get layout data
-    var oLayout = oCtx.getObject();
-    var sLayoutName = oLayout.name;
-
-    var oView = this.getView();
-    var oODataModel = oView.getModel("oModel");
-
-    // 3️⃣ First READ user from backend
-    oODataModel.read("/UserApprovalLevelSet", {
-        success: function (oData) {
-
+        // 3️⃣ First READ user from backend
+        oODataModel.read("/UserApprovalLevelSet", {
+          success: function (oData) {
             if (!oData.results || oData.results.length === 0) {
-                sap.m.MessageBox.error("User verification data not found");
-                return;
+              sap.m.MessageBox.error("User verification data not found");
+              return;
             }
 
             // 🔹 Take first record
@@ -1380,67 +1431,61 @@ onDeleteLayout: function (oEvent) {
 
             // 4️⃣ Confirm delete
             sap.m.MessageBox.confirm(
-                'Are you sure you want to delete layout "' + sLayoutName + '"?',
-                {
-                    title: "Delete Layout",
-                    actions: [
-                        sap.m.MessageBox.Action.OK,
-                        sap.m.MessageBox.Action.CANCEL
-                    ],
-                    onClose: function (sAction) {
+              'Are you sure you want to delete layout "' + sLayoutName + '"?',
+              {
+                title: "Delete Layout",
+                actions: [
+                  sap.m.MessageBox.Action.OK,
+                  sap.m.MessageBox.Action.CANCEL,
+                ],
+                onClose: function (sAction) {
+                  if (sAction !== sap.m.MessageBox.Action.OK) {
+                    return;
+                  }
 
-                        if (sAction !== sap.m.MessageBox.Action.OK) {
-                            return;
-                        }
+                  // 5️⃣ DELETE call with LayoutName + UserName
+                  var sPath =
+                    "/UserLayoutParametersSet(" +
+                    "UserId='" +
+                    encodeURIComponent(sUserName) +
+                    "'," +
+                    "LayoutName='" +
+                    encodeURIComponent(sLayoutName) +
+                    "'" +
+                    ")";
 
-                        // 5️⃣ DELETE call with LayoutName + UserName
-                        var sPath =
-                            "/UserLayoutParametersSet(" +
-                            "UserId='" + encodeURIComponent(sUserName) + "'," +
-                            "LayoutName='" + encodeURIComponent(sLayoutName) + "'" +
-                            
-                            ")";
-                            
+                  oODataModel.remove(sPath, {
+                    success: function () {
+                      // 6️⃣ Update UI model
+                      var oLayoutModel = oView.getModel("layoutModel");
+                      var aLayouts = oLayoutModel.getProperty("/layouts") || [];
 
-                        oODataModel.remove(sPath, {
-                            success: function () {
+                      oLayoutModel.setProperty(
+                        "/layouts",
+                        aLayouts.filter(function (oItem) {
+                          return oItem.name !== sLayoutName;
+                        }),
+                      );
 
-                                // 6️⃣ Update UI model
-                                var oLayoutModel = oView.getModel("layoutModel");
-                                var aLayouts = oLayoutModel.getProperty("/layouts") || [];
+                      sap.m.MessageToast.show("Layout deleted successfully");
+                    },
 
-                                oLayoutModel.setProperty(
-                                    "/layouts",
-                                    aLayouts.filter(function (oItem) {
-                                        return oItem.name !== sLayoutName;
-                                    })
-                                );
-
-                                sap.m.MessageToast.show("Layout deleted successfully");
-                            },
-
-                            error: function (oError) {
-                                console.error("Delete failed", oError);
-                                sap.m.MessageToast.show("Failed to delete layout");
-                            }
-                        });
-                    }
-                }
+                    error: function (oError) {
+                      console.error("Delete failed", oError);
+                      sap.m.MessageToast.show("Failed to delete layout");
+                    },
+                  });
+                },
+              },
             );
+          }.bind(this),
 
-        }.bind(this),
-
-        error: function (oError) {
+          error: function (oError) {
             sap.m.MessageBox.error("Failed to fetch user data");
             console.error(oError);
-        }
-    });
-}
-
-
-
-
-,
+          },
+        });
+      },
 
       onTdsAmountChange: function (oEvent) {
         var oInput = oEvent.getSource();
@@ -1525,11 +1570,6 @@ onDeleteLayout: function (oEvent) {
       },
 
       _processBulkAction: function (aSelectedItems, sActionType) {
-        console.log("=== _processBulkAction CALLED ===");
-        console.log("Selected Items Count:", aSelectedItems.length);
-        console.log("Action Type:", sActionType);
-        console.log("Selected Items:", aSelectedItems);
-
         var oTreeModel = this.getView().getModel("treeData");
         var aTreeData = oTreeModel.getData().treeData;
         var sStatus = sActionType === "APPROVE" ? "APPROVED" : "REJECTED";
@@ -1650,6 +1690,7 @@ onDeleteLayout: function (oEvent) {
 
         var oDeepPayload = {
           ApprovalNo: sApprovalNo,
+
           CreatedOn: null,
           ProfitCenter: oFirst.ProfitCenter || "",
           ProfitCenterName: oFirst.ProfitCenterName || "",
@@ -1681,8 +1722,9 @@ onDeleteLayout: function (oEvent) {
 
           ToItems: {
             results: aPayloadItems.map(function (oItem) {
-              return {
+              var oMappedItem = {
                 ApprovalNo: sApprovalNo,
+                Completed: "",
                 ProfitCenter: oItem.ProfitCenter || "",
                 TaxNum: oItem.TaxNum || "",
                 ProfitCenterName: oItem.ProfitCenterName || "",
@@ -1726,13 +1768,14 @@ onDeleteLayout: function (oEvent) {
                 PmApprOn: toEdmDateTime(oItem.PmApprOn),
                 PmApprRemarks: oItem.PmApprRemarks || "",
 
-               /* ===== HOD ===== */
+                /* ===== HOD ===== */
                 HodApprAmt: dec(oItem.HodApprAmt || "0.00"),
                 HodUserId: oItem.HodUserId || "",
                 HodApprStatus: oItem.HodApprStatus || "",
+
                 HodApprOn: oItem.HodApprOn
-                ? toEdmDateTime(oItem.HodApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.HodApprOn)
+                  : null,
                 HodApprRemarks: oItem.HodApprRemarks || "",
 
                 /* ===== CFO ===== */
@@ -1740,8 +1783,8 @@ onDeleteLayout: function (oEvent) {
                 CfoUserId: oItem.CfoUserId || "",
                 CfoApprStatus: oItem.CfoApprStatus || "",
                 CfoApprOn: oItem.CfoApprOn
-                ? toEdmDateTime(oItem.CfoApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.CfoApprOn)
+                  : null,
                 CfoApprRemarks: oItem.CfoApprRemarks || "",
 
                 /* ===== AUDITOR ===== */
@@ -1749,8 +1792,8 @@ onDeleteLayout: function (oEvent) {
                 AudUserId: oItem.AudUserId || "",
                 AudApprStatus: oItem.AudApprStatus || "",
                 AudApprOn: oItem.AudApprOn
-                ? toEdmDateTime(oItem.AudApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.AudApprOn)
+                  : null,
                 AudApprRemarks: oItem.AudApprRemarks || "",
 
                 /* ===== DIRECTOR ===== */
@@ -1758,20 +1801,29 @@ onDeleteLayout: function (oEvent) {
                 DirUserId: oItem.DirUserId || "",
                 DirApprStatus: oItem.DirApprStatus || "",
                 DirApprOn: oItem.DirApprOn
-                ? toEdmDateTime(oItem.DirApprOn)
-                : null,
+                  ? toEdmDateTime(oItem.DirApprOn)
+                  : null,
                 DirApprRemarks: oItem.DirApprRemarks || "",
 
-
                 ModeOfPayment: "",
-                UtrNo: "",
-                PaidAmount1: "0.00",
-                PaymentDate1: null,
-                PaidAmount2: "0.00",
-                PaymentDate2: null,
-                TotalBalOut: "0.00",
                 BalancePayable: "0.00",
+                TotalBalOut: dec(oItem.TotalBalOut || "0.00"),
+                RejectionIndicator: "",
+                RejectedBy: "",
+                RejectionDate: null,
+                RejectorDesignation: "",
               };
+
+              /* ================= REJECTION FIELDS (ONLY IF REJECT) ================= */
+
+              if (sActionType === "REJECT") {
+                oMappedItem.RejectionIndicator = "X";
+                oMappedItem.RejectedBy = oItem.CfoUserId || "";
+                oMappedItem.RejectionDate = toEdmDateTime(new Date());
+                oMappedItem.RejectorDesignation = "CFO";
+              }
+
+              return oMappedItem;
             }),
           },
         };
@@ -1785,7 +1837,10 @@ onDeleteLayout: function (oEvent) {
           success: function () {
             sap.ui.core.BusyIndicator.hide();
             sap.m.MessageToast.show("submitted successfully");
-          },
+
+            
+            this._loadPaymentData();
+          }.bind(this),
           error: function (oError) {
             sap.ui.core.BusyIndicator.hide();
             console.error("❌ Deep create failed", oError);
@@ -1797,10 +1852,15 @@ onDeleteLayout: function (oEvent) {
       _createPayloadItem: function (oItem, sStatus, sDefaultRemarks) {
         console.log("=== _createPayloadItem CALLED ===");
         console.log("Input Item:", oItem);
+
         console.log("Status:", sStatus);
         console.log("Default Remarks:", sDefaultRemarks);
 
-        var sCurrentUser = this._getCurrentUserId();
+        var sUserId = this.getView()
+          .getModel("localUser")
+          .getProperty("/UserName");
+
+        var sCurrentUser = sUserId ? sUserId.toString().trim() : "UNKNOWN_USER";
 
         // Ensure required key fields are properly formatted
         var sApprovalNo = (oItem.ApprovalNo || "").toString().trim();
@@ -1824,6 +1884,7 @@ onDeleteLayout: function (oEvent) {
         var oPayloadItem = {
           // Key fields (required for OData operations)
           ApprovalNo: sApprovalNo,
+          Completed: "",
           VendorCode: sVendorCode,
           VendorNumber: sVendorCode, // Alias for compatibility
           ProfitCenterName: (oItem.ProfitCenterName || "").toString(),
@@ -1842,19 +1903,28 @@ onDeleteLayout: function (oEvent) {
           TotalLiability: parseFloat(oItem.TotalLiability || 0).toString(),
           AmtClaimed: parseFloat(oItem.AmtClaimed || 0).toString(),
           PmApprAmt: parseFloat(oItem.PmApprAmt || 0).toString(),
+
           CfoApprAmt: parseFloat(oItem.CfoApprAmt || 0).toString(),
           AudApprAmt: parseFloat(oItem.AudApprAmt || 0).toString(),
 
           DirApprAmt: parseFloat(oItem.DirApprAmt || 0).toString(),
-          PmApprStatus: sStatus,
+          PmApprStatus: oItem.PmApprStatus,
+          HodApprStatus: oItem.HodApprStatus,
           CfoApprStatus: sStatus,
           PmApprRemarks: (
             oItem.PmApprRemarks ||
             sDefaultRemarks ||
             ""
           ).toString(),
+          HodApprRemarks: (
+            oItem.HodApprRemarks ||
+            sDefaultRemarks ||
+            ""
+          ).toString(),
           PmApprOn: new Date().toISOString(),
           PmUserId: sCurrentUser,
+          HodUserId: sCurrentUser,
+          HodApprOn: new Date().toISOString(),
           CfoApprOn: new Date().toISOString(),
           Currency: (oItem.Currency || "INR").toString(),
           AccountNumber: (oItem.AccountNumber || "").toString(),
@@ -1877,75 +1947,6 @@ onDeleteLayout: function (oEvent) {
           AccountHolder: (oItem.AccountHolder || "").toString(),
           Branch: (oItem.Branch || "").toString(),
         };
-
-        console.log("=== COMPLETE PAYLOAD ITEM CREATED ===");
-        console.log("Payload Item Details:");
-        console.log("  ApprovalNo:", oPayloadItem.ApprovalNo);
-        console.log("  VendorCode:", oPayloadItem.VendorCode);
-        console.log("  ItemNum:", oPayloadItem.ItemNum);
-        console.log("  VendorName:", oPayloadItem.VendorName);
-        console.log("  DocNum:", oPayloadItem.DocNum);
-        console.log("  LiabHead:", oPayloadItem.LiabHead);
-        console.log("  PurchDoc:", oPayloadItem.PurchDoc);
-        console.log("  DocDate:", oPayloadItem.DocDate);
-        console.log("  PostingDt:", oPayloadItem.PostingDt);
-        console.log("  BaseAmt:", oPayloadItem.BaseAmt);
-        console.log("  GstAmt:", oPayloadItem.GstAmt);
-        console.log("  TdsAmount:", oPayloadItem.TdsAmount);
-        console.log("  TotalLiability:", oPayloadItem.TotalLiability);
-        console.log("  AmtClaimed:", oPayloadItem.AmtClaimed);
-        console.log("  PmApprAmt:", oPayloadItem.PmApprAmt);
-        console.log("  PmApprStatus:", oPayloadItem.PmApprStatus);
-        console.log("  PmApprRemarks:", oPayloadItem.PmApprRemarks);
-        console.log("  PmApprOn:", oPayloadItem.PmApprOn);
-        console.log("  PmUserId:", oPayloadItem.PmUserId);
-        console.log("  Currency:", oPayloadItem.Currency);
-        console.log("  AccountNumber:", oPayloadItem.AccountNumber);
-        console.log("  BankName:", oPayloadItem.BankName);
-        console.log("  TaxNum:", oPayloadItem.TaxNum);
-        console.log("  BankKey:", oPayloadItem.BankKey);
-        console.log("  ReferenceDoc:", oPayloadItem.ReferenceDoc);
-        console.log("  Gst2aRef:", oPayloadItem.Gst2aRef);
-        console.log("  Gst2aNref:", oPayloadItem.Gst2aNref);
-        console.log("  AprnoRef:", oPayloadItem.AprnoRef);
-        console.log("  Gstr1Details:", oPayloadItem.Gstr1Details);
-        console.log("  Remark:", oPayloadItem.Remark);
-        console.log("  AccountHolder:", oPayloadItem.AccountHolder);
-        console.log("  Branch:", oPayloadItem.Branch);
-        console.log("=== FULL PAYLOAD ITEM (JSON) ===");
-        console.log(JSON.stringify(oPayloadItem, null, 2));
-        console.log("=== USER REQUESTED PAYLOAD FORMAT ===");
-        console.log("ItemNum:", oPayloadItem.ItemNum);
-        console.log("VendorName:", oPayloadItem.VendorName);
-        console.log("DocNum:", oPayloadItem.DocNum);
-        console.log("LiabHead:", oPayloadItem.LiabHead);
-        console.log("PurchDoc:", oPayloadItem.PurchDoc);
-        console.log("DocDate:", oPayloadItem.DocDate);
-        console.log("PostingDt:", oPayloadItem.PostingDt);
-        console.log("BaseAmt:", oPayloadItem.BaseAmt);
-        console.log("GstAmt:", oPayloadItem.GstAmt);
-        console.log("TdsAmount:", oPayloadItem.TdsAmount);
-        console.log("TotalLiability:", oPayloadItem.TotalLiability);
-        console.log("AmtClaimed:", oPayloadItem.AmtClaimed);
-        console.log("PmApprAmt:", oPayloadItem.PmApprAmt);
-        console.log("PmApprStatus:", oPayloadItem.PmApprStatus);
-        console.log("PmApprRemarks:", oPayloadItem.PmApprRemarks);
-        console.log("PmApprOn:", oPayloadItem.PmApprOn);
-        console.log("PmUserId:", oPayloadItem.PmUserId);
-        console.log("Currency:", oPayloadItem.Currency);
-        console.log("AccountNumber:", oPayloadItem.AccountNumber);
-        console.log("BankName:", oPayloadItem.BankName);
-        console.log("TaxNum:", oPayloadItem.TaxNum);
-        console.log("BankKey:", oPayloadItem.BankKey);
-        console.log("ReferenceDoc:", oPayloadItem.ReferenceDoc);
-        console.log("Gst2aRef:", oPayloadItem.Gst2aRef);
-        console.log("Gst2aNref:", oPayloadItem.Gst2aNref);
-        console.log("AprnoRef:", oPayloadItem.AprnoRef);
-        console.log("Gstr1Details:", oPayloadItem.Gstr1Details);
-        console.log("Remark:", oPayloadItem.Remark);
-        console.log("AccountHolder:", oPayloadItem.AccountHolder);
-        console.log("Branch:", oPayloadItem.Branch);
-        console.log("===============================");
 
         return oPayloadItem;
       },

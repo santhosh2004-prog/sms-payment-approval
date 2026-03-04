@@ -11,7 +11,7 @@
     <f:DynamicPage id="idPaymentDynamicPage">
         <!-- ================= TITLE ================= -->
         <f:title>
-            <f:DynamicPageTitle >
+            <f:DynamicPageTitle>
                 <f:heading>
                     <m:Title text="HoAccounts Payment Approvals" />
                 </f:heading>
@@ -144,6 +144,10 @@
                             <m:Text
                                 text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
                                 visible="{treeData>isHeader}"
+                            />
+                            <m:Text
+                                text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
+                                visible="{= !${treeData>isHeader} }"
                             />
                         </table:template>
                     </table:Column>
@@ -414,10 +418,25 @@
                         filterProperty="Gst2aRef"
                     >
                         <table:template>
-                            <m:Text
-                                text="{parts: [{path: 'treeData>Gst2aRef'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
-                                visible="{= !${treeData>isHeader} }"
-                            />
+                            <m:VBox>
+                                <!-- Header Row (Total) -->
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>Gst2aRef'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                    visible="{treeData>isHeader}"
+                                    class="sapThemeHighlight-asTextColor"
+                                />
+
+                                <!-- Editable Row -->
+                                <m:Input
+                                    value="{treeData>Gst2aRef}"
+                                    visible="{= !${treeData>isHeader} }"
+                                    type="Number"
+                                    width="100%"
+                                    placeholder="0.00"
+                                    textAlign="End"
+                                    change="onGst2aRefChange"
+                                />
+                            </m:VBox>
                         </table:template>
                     </table:Column>
 
@@ -430,10 +449,25 @@
                         filterProperty="Gst2aNref"
                     >
                         <table:template>
-                            <m:Text
-                                text="{parts: [{path: 'treeData>Gst2aNref'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
-                                visible="{= !${treeData>isHeader} }"
-                            />
+                            <m:VBox>
+                                <!-- Header Row (Total) -->
+                                <m:Text
+                                    text="{parts: [{path: 'treeData>Gst2aNref'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                                    visible="{treeData>isHeader}"
+                                    class="sapThemeHighlight-asTextColor"
+                                />
+
+                                <!-- Editable Row -->
+                                <m:Input
+                                    value="{treeData>Gst2aNref}"
+                                    visible="{= !${treeData>isHeader} }"
+                                    type="Number"
+                                    width="100%"
+                                    placeholder="0.00"
+                                    textAlign="End"
+                                    change="onGst2aNrefChange"
+                                />
+                            </m:VBox>
                         </table:template>
                     </table:Column>
 
@@ -538,7 +572,7 @@
                         </table:template>
                     </table:Column>
 
-                    <table:Column
+                    <!-- <table:Column
                         id="colhodRemark"
                         label="hod manager  Remark"
                         width="200px"
@@ -553,7 +587,7 @@
                                 change="onRemarksChange"
                             />
                         </table:template>
-                    </table:Column>
+                    </table:Column> -->
 
                     <!-- ================= Bank Name (Item) ================= -->
                     <table:Column

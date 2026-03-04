@@ -145,6 +145,10 @@
                                 text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
                                 visible="{treeData>isHeader}"
                             />
+                            <m:Text
+                                text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
                         </table:template>
                     </table:Column>
 
@@ -492,8 +496,7 @@
                         hAlign="End"
                         filterProperty="PmApprAmt"
                     >
-                      
-                            <!-- <m:Input
+                        <!-- <m:Input
                                 value="{treeData>PmApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
                                 type="Number"
@@ -501,7 +504,7 @@
                                 textAlign="End"
                                 change="onPmApprAmountChange"
                             /> -->
-                      <table:template>
+                        <table:template>
                             <m:Text
                                 text="{treeData>PmApprAmt}"
                                 visible="{= !${treeData>isHeader} }"
@@ -542,7 +545,6 @@
                             />
                         </table:template>
                     </table:Column> -->
-
 
                     <table:Column
                         id="colPmRemark"
