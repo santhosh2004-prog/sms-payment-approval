@@ -100,8 +100,13 @@
                     fixedColumnCount="5"
                     enableBusyIndicator="true"
                     width="100%"
+                    visibleRowCountMode="Auto"
                     class="sapUiSizeCompact"
                 >
+                    <!-- Make TreeTable fill remaining page space -->
+                    <table:layoutData>
+                        <m:FlexItemData growFactor="1" />
+                    </table:layoutData>
                     <table:Column
                         id="colRowSelection"
                         width="90px"

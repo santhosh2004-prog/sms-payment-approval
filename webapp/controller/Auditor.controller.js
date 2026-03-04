@@ -432,179 +432,258 @@ sap.ui.define(
         },
 
         _loadPaymentData: function () {
-          var oModel = this.getView().getModel("oModel");
 
-          if (!oModel) {
-            MessageToast.show("OData model 'oModel' not available");
-            return;
-          }
+    var oModel = this.getView().getModel("oModel");
 
-          oModel.read("/PaymentHeaderSet", {
-            urlParameters: {
-              $expand: "ToItems",
-            },
+    if (!oModel) {
+        MessageToast.show("OData model 'oModel' not available");
+        return;
+    }
 
-            success: function (oData) {
-              console.log("PaymentHeaderSet raw response:", oData);
+    oModel.read("/PaymentHeaderSet", {
 
-              var aHeaders = oData && oData.results ? oData.results : [];
-              console.log("Total Headers count:", aHeaders.length);
-
-              /* ===================================================== */
-              /* 🔹 FILTER ITEMS WHERE CFO STATUS = APPROVED          */
-              /* ===================================================== */
-
-              var aFilteredHeaders = aHeaders
-                .map(function (oHeader) {
-                  var aItems =
-                    oHeader.ToItems && oHeader.ToItems.results
-                      ? oHeader.ToItems.results
-                      : [];
-
-                  // 🔹 Keep only items where CFO Approval Status = APPROVED
-                  var aApprovedItems = aItems.filter(function (oItem) {
-                    // 🔹 Store all approval statuses in order
-                    var aStatuses = [
-                      oItem.Pmapprstatus,
-                      oItem.HodApprStatus,
-                      oItem.CfoApprStatus,
-                      oItem.AudApprStatus,
-                      oItem.DirApprStatus,
-                    ];
-
-                    var sLastApprovedStatus = null;
-
-                    // 🔹 Loop to find last approved stage
-                    for (var i = 0; i < aStatuses.length; i++) {
-                      if (aStatuses[i] === "APPROVED") {
-                        sLastApprovedStatus = i // store index of last approved
-                      }
-                    }
-
-                    // 🔹 If last approved stage is CFO → Skip
-                    // CFO index = 2 (PMA=0, HOD=1, CFO=2)
-                    if (sLastApprovedStatus >= 3) {
-                      return false; // Skip this item
-                    }
-                    var iTotalLiability = parseFloat(oItem.TotalLiability) || 0;
-                    if (iTotalLiability > 1000000){
-                      return false; // Skip if total liability is zero
-                    }
-                   
-                    
-
-                    return true; // Keep other items
-                  });
-
-                  // 🔹 If no approved items → skip header
-                  if (aApprovedItems.length === 0) {
-                    return null;
-                  }
-
-                  // 🔹 Return cloned header with only approved items
-                  return Object.assign({}, oHeader, {
-                    ToItems: {
-                      results: aApprovedItems,
-                    },
-                  });
-                })
-                .filter(Boolean); // remove null headers
-
-              console.log(
-                "Headers with CFO Approved items:",
-                aFilteredHeaders.length,
-              );
-
-              /* ===================================================== */
-              /* 🔹 IF NO APPROVED RECORDS                             */
-              /* ===================================================== */
-
-              if (aFilteredHeaders.length === 0) {
-                MessageToast.show("No CFO Approved records found");
-                this.getView().getModel("treeData").setData({ treeData: [] });
-                return;
-              }
-
-              /* ===================================================== */
-              /* 🔹 BIND FILTERED DATA                                 */
-              /* ===================================================== */
-
-              this._transformExpandedHeaderToTree(aFilteredHeaders);
-            }.bind(this),
-
-            error: function (oError) {
-              console.error(
-                "Error loading PaymentHeaderSet with expand:",
-                oError,
-              );
-              this.getView().getModel("treeData").setData({ treeData: [] });
-              MessageToast.show("Error loading payment data");
-            }.bind(this),
-          });
+        urlParameters: {
+            $expand: "ToItems",
         },
 
-        _transformExpandedHeaderToTree: function (aHeaders) {
-          var aTreeData = aHeaders.map(function (oHeader) {
-            var aItems =
-              oHeader.ToItems && oHeader.ToItems.results
-                ? oHeader.ToItems.results
-                : [];
+        success: function (oData) {
 
-            return {
-              // ===== Header (backend fields) =====
-              ApprovalNo: oHeader.ApprovalNo,
-              CreatedOn: oHeader.CreatedOn,
-              ProfitCenter: oHeader.ProfitCenter,
-              ProfitCenterName: oHeader.ProfitCenterName,
-              VendorCode: oHeader.VendorCode,
-              VendorName: oHeader.VendorName,
-              CompanyCode: oHeader.CompanyCode,
-              CreatedBy: oHeader.CreatedBy,
-              CreatedAt: oHeader.CreationTime,
-              OverallStatus: oHeader.OverallStatus,
+            console.log("PaymentHeaderSet raw response:", oData);
 
-              // ===== Amounts from backend header =====
-              TotalBaseAmt: oHeader.BaseAmount,
-              TotalGstAmt: oHeader.GSTAmount,
-              TotalTdsAmount: oHeader.TDSAmount,
-              TotalLiability: oHeader.TotalLiability,
-              TotalAmtClaimed: oHeader.AmountClaimed,
+            var aHeaders = oData && oData.results ? oData.results : [];
+            console.log("Total Headers count:", aHeaders.length);
 
-              ItemCount: aItems.length,
+            /* ===================================================== */
+            /* 🔹 FILTER ITEMS WHERE CFO STATUS CONDITION           */
+            /* ===================================================== */
 
-              isHeader: true,
-              displayText:
+            var aFilteredHeaders = aHeaders
+                .map(function (oHeader) {
+
+                    var aItems =
+                        oHeader.ToItems && oHeader.ToItems.results
+                            ? oHeader.ToItems.results
+                            : [];
+
+                    var aApprovedItems = aItems.filter(function (oItem) {
+
+                        var aStatuses = [
+                            oItem.Pmapprstatus,
+                            oItem.HodApprStatus,
+                            oItem.CfoApprStatus,
+                            oItem.AudApprStatus,
+                            oItem.DirApprStatus
+                        ];
+
+                        var sLastApprovedStatus = null;
+
+                        for (var i = 0; i < aStatuses.length; i++) {
+
+                            if (aStatuses[i] === "APPROVED") {
+                                sLastApprovedStatus = i;
+                            }
+
+                        }
+
+                        /* Skip items already approved by AUD or beyond */
+                        if (sLastApprovedStatus >= 3) {
+                            return false;
+                        }
+
+                        /* Skip if liability > 10L */
+                        var iTotalLiability = parseFloat(oItem.TotalLiability) || 0;
+
+                        if (iTotalLiability > 1000000) {
+                            return false;
+                        }
+
+                        return true;
+
+                    });
+
+                    /* Skip header if no items */
+                    if (aApprovedItems.length === 0) {
+                        return null;
+                    }
+
+                    /* ===================================================== */
+                    /* 🔹 CALCULATE HEADER TOTALS                           */
+                    /* ===================================================== */
+
+                    var fTotalBaseAmt = 0;
+                    var fTotalGstAmt = 0;
+                    var fTotalTdsAmount = 0;
+                    var fTotalAmtClaimed = 0;
+                    var fTotalLiability = 0;
+
+                    aApprovedItems.forEach(function (oItem) {
+
+                        fTotalBaseAmt += parseFloat(oItem.BaseAmt) || 0;
+
+                        fTotalGstAmt += parseFloat(oItem.GstAmt) || 0;
+
+                        fTotalTdsAmount += parseFloat(oItem.TdsAmount) || 0;
+
+                        fTotalAmtClaimed += parseFloat(oItem.AmtClaimed) || 0;
+
+                        fTotalLiability += parseFloat(oItem.TotalLiability) || 0;
+
+                    });
+
+                    /* ===================================================== */
+
+                    return Object.assign({}, oHeader, {
+
+                        /* FRONTEND CALCULATED TOTALS */
+
+                        TotalBaseAmt: fTotalBaseAmt.toFixed(2),
+                        TotalGstAmt: fTotalGstAmt.toFixed(2),
+                        TotalTdsAmount: fTotalTdsAmount.toFixed(2),
+                        TotalAmtClaimed: fTotalAmtClaimed.toFixed(2),
+                        TotalLiability: fTotalLiability.toFixed(2),
+
+                        /* FILTERED ITEMS */
+
+                        ToItems: {
+                            results: aApprovedItems
+                        }
+
+                    });
+
+                })
+                .filter(Boolean);
+
+            console.log(
+                "Headers with CFO Approved items:",
+                aFilteredHeaders.length
+            );
+
+            /* ===================================================== */
+            /* 🔹 IF NO APPROVED RECORDS                             */
+            /* ===================================================== */
+
+            if (aFilteredHeaders.length === 0) {
+
+                MessageToast.show("No CFO Approved records found");
+
+                this.getView().getModel("treeData").setData({
+                    treeData: []
+                });
+
+                return;
+
+            }
+
+            /* ===================================================== */
+            /* 🔹 BIND FILTERED DATA                                 */
+            /* ===================================================== */
+
+            this._transformExpandedHeaderToTree(aFilteredHeaders);
+
+        }.bind(this),
+
+        error: function (oError) {
+
+            console.error(
+                "Error loading PaymentHeaderSet with expand:",
+                oError
+            );
+
+            this.getView().getModel("treeData").setData({
+                treeData: []
+            });
+
+            MessageToast.show("Error loading payment data");
+
+        }.bind(this),
+    });
+
+},
+
+               _transformExpandedHeaderToTree: function (aHeaders) {
+
+    var aTreeData = aHeaders.map(function (oHeader) {
+
+        var aItems = (oHeader.ToItems && oHeader.ToItems.results)
+            ? oHeader.ToItems.results
+            : [];
+
+        return {
+
+            /* HEADER DATA */
+
+            ApprovalNo: oHeader.ApprovalNo,
+            CreatedOn: oHeader.CreatedOn,
+            ProfitCenter: oHeader.ProfitCenter,
+            ProfitCenterName: oHeader.ProfitCenterName,
+            VendorCode: oHeader.VendorCode,
+            VendorName: oHeader.VendorName,
+            CompanyCode: oHeader.CompanyCode,
+            CreatedBy: oHeader.CreatedBy,
+            CreatedAt: oHeader.CreationTime,
+            OverallStatus: oHeader.OverallStatus,
+
+            /* FRONTEND TOTALS */
+
+            TotalBaseAmt: oHeader.TotalBaseAmt,
+            TotalGstAmt: oHeader.TotalGstAmt,
+            TotalTdsAmount: oHeader.TotalTdsAmount,
+            TotalLiability: oHeader.TotalLiability,
+            TotalAmtClaimed: oHeader.TotalAmtClaimed,
+
+            ItemCount: aItems.length,
+
+            isHeader: true,
+
+            displayText:
                 "Approval: " +
                 oHeader.ApprovalNo +
                 " - " +
                 (oHeader.VendorName || ""),
-              Currency: aItems.length > 0 ? aItems[0].Currency : "",
 
-              // ===== Children =====
-              children: aItems.map(function (oItem) {
+            Currency: aItems.length > 0 ? aItems[0].Currency : "",
+
+            /* CHILD ITEMS */
+
+            children: aItems.map(function (oItem) {
+
                 return Object.assign({}, oItem, {
-                  isHeader: false,
-                  displayText:
-                    "Item " + oItem.ItemNum + " - " + (oItem.VendorName || ""),
+
+                    isHeader: false,
+
+                    displayText:
+                        "Item " +
+                        oItem.ItemNum +
+                        " - " +
+                        (oItem.VendorName || "")
+
                 });
-              }),
-            };
-          });
 
-          this.getView().getModel("treeData").setData({ treeData: aTreeData });
+            })
 
-          setTimeout(
-            function () {
-              var oTreeTable = this.byId("idTreeTable");
-              if (oTreeTable && aTreeData.length > 0) {
-                for (var i = 0; i < aTreeData.length; i++) {
-                  oTreeTable.expand(i);
-                }
-              }
-            }.bind(this),
-            100,
-          );
-        },
+        };
+
+    });
+
+    this.getView().getModel("treeData").setData({
+        treeData: aTreeData
+    });
+
+    setTimeout(function () {
+
+        var oTreeTable = this.byId("idTreeTable");
+
+        if (oTreeTable && aTreeData.length > 0) {
+
+            for (var i = 0; i < aTreeData.length; i++) {
+                oTreeTable.expand(i);
+            }
+
+        }
+
+    }.bind(this), 100);
+
+},
 
         onSwitchShowInLakhsChange: function (oEvent) {
           var oSwitch = oEvent.getSource();

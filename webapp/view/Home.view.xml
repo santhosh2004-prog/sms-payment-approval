@@ -6,7 +6,7 @@
     displayBlock="true"
     height="100%">
 
-    <f:DynamicPage id="idHomeDynamicPage">
+    <f:DynamicPage id="idHomeDynamicPage"  >
 
         <f:title>
             <f:DynamicPageTitle>

@@ -8,7 +8,9 @@
     displayBlock="true"
     height="100%"
 >
-    <f:DynamicPage id="idPaymentDynamicPage">
+    <f:DynamicPage
+    id="idPaymentDynamicPage"
+    fitContent="true">
         <!-- ================= TITLE ================= -->
         <f:title>
             <f:DynamicPageTitle>
@@ -21,7 +23,6 @@
         <!-- ================= CONTENT ================= -->
         <f:content>
             <m:VBox
-                height="100%"
                 fitContainer="true"
                 class="sapUiContentPadding"
             >
@@ -100,8 +101,13 @@
                     fixedColumnCount="5"
                     enableBusyIndicator="true"
                     width="100%"
-                    class="sapUiSizeCompact"
-                >
+                    visibleRowCountMode="Auto"
+                    class="sapUiSizeCompact">
+
+                    <!-- Make TreeTable fill remaining page space -->
+                    <table:layoutData>
+                        <m:FlexItemData growFactor="1"/>
+                    </table:layoutData>
                     <table:Column
                         id="colRowSelection"
                         width="90px"
@@ -139,17 +145,16 @@
                         label="Date of Approval Note"
                         width="140px"
                         filterProperty="CreatedOn"
-                        
                     >
                         <table:template>
                             <m:Text
                                 text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
                                 visible="{treeData>isHeader}"
                             />
-                             <m:Text
-                text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
-                visible="{= !${treeData>isHeader} }"
-            />
+                            <m:Text
+                                text="{path:'treeData>CreatedOn', type:'sap.ui.model.odata.type.DateTime', formatOptions:{pattern:'dd.MM.yyyy'}}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
                         </table:template>
                     </table:Column>
 

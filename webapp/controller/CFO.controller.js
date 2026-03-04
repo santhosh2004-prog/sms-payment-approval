@@ -387,19 +387,21 @@ sap.ui.define(
       },
 
       _loadPaymentData: function () {
-        var oModel = this.getView().getModel("oModel");
 
-        if (!oModel) {
-          MessageToast.show("OData model 'oModel' not available");
-          return;
-        }
+    var oModel = this.getView().getModel("oModel");
 
-        oModel.read("/PaymentHeaderSet", {
-          urlParameters: {
+    if (!oModel) {
+        MessageToast.show("OData model 'oModel' not available");
+        return;
+    }
+
+    oModel.read("/PaymentHeaderSet", {
+        urlParameters: {
             $expand: "ToItems",
-          },
+        },
 
-          success: function (oData) {
+        success: function (oData) {
+
             console.log("PaymentHeaderSet raw response:", oData);
 
             var aHeaders = oData && oData.results ? oData.results : [];
@@ -410,58 +412,95 @@ sap.ui.define(
             /* ===================================================== */
 
             var aFilteredHeaders = aHeaders
-              .map(function (oHeader) {
-                var aItems =
-                  oHeader.ToItems && oHeader.ToItems.results
-                    ? oHeader.ToItems.results
-                    : [];
+                .map(function (oHeader) {
 
-                // 🔹 Keep only items where HOD Approval Status = APPROVED
-                var aApprovedItems = aItems.filter(function (oItem) {
-                  // 🔹 Store all approval statuses in order
-                  var aStatuses = [
-                    oItem.Pmapprstatus,
-                    oItem.HodApprStatus,
-                    oItem.CfoApprStatus,
-                    oItem.AudApprStatus,
-                    oItem.DirApprStatus,
-                  ];
+                    var aItems =
+                        oHeader.ToItems && oHeader.ToItems.results
+                            ? oHeader.ToItems.results
+                            : [];
 
-                  var sLastApprovedStatus = null;
+                    var aApprovedItems = aItems.filter(function (oItem) {
 
-                  // 🔹 Loop to find last approved stage
-                  for (var i = 0; i < aStatuses.length; i++) {
-                    if (aStatuses[i] === "APPROVED") {
-                      sLastApprovedStatus = i; // store index of last approved
+                        var aStatuses = [
+                            oItem.Pmapprstatus,
+                            oItem.HodApprStatus,
+                            oItem.CfoApprStatus,
+                            oItem.AudApprStatus,
+                            oItem.DirApprStatus
+                        ];
+
+                        var sLastApprovedStatus = null;
+
+                        for (var i = 0; i < aStatuses.length; i++) {
+                            if (aStatuses[i] === "APPROVED") {
+                                sLastApprovedStatus = i;
+                            }
+                        }
+
+                        /* Skip items already approved by CFO or beyond */
+                        if (sLastApprovedStatus >= 2) {
+                            return false;
+                        }
+
+                        return true;
+
+                    });
+
+                    /* 🔹 If no items → skip header */
+                    if (aApprovedItems.length === 0) {
+                        return null;
                     }
-                  }
 
-                  // 🔹 If last approved stage is CFO → Skip
-                  // CFO index = 2 (PMA=0, HOD=1, CFO=2)
-                  if (sLastApprovedStatus >= 2) {
-                    return false; // Skip this item
-                  }
+                    /* ===================================================== */
+                    /* 🔹 CALCULATE HEADER TOTALS                           */
+                    /* ===================================================== */
 
-                  return true; // Keep other items
-                });
+                    var fTotalBaseAmt = 0;
+                    var fTotalGstAmt = 0;
+                    var fTotalTdsAmount = 0;
+                    var fTotalAmtClaimed = 0;
+                    var fTotalLiability = 0;
 
-                // 🔹 If no approved items → skip header
-                if (aApprovedItems.length === 0) {
-                  return null;
-                }
+                    aApprovedItems.forEach(function (oItem) {
 
-                // 🔹 Return cloned header with only approved items
-                return Object.assign({}, oHeader, {
-                  ToItems: {
-                    results: aApprovedItems,
-                  },
-                });
-              })
-              .filter(Boolean); // remove null headers
+                        fTotalBaseAmt += parseFloat(oItem.BaseAmt) || 0;
+
+                        fTotalGstAmt += parseFloat(oItem.GstAmt) || 0;
+
+                        fTotalTdsAmount += parseFloat(oItem.TdsAmount) || 0;
+
+                        fTotalAmtClaimed += parseFloat(oItem.AmtClaimed) || 0;
+
+                        fTotalLiability += parseFloat(oItem.TotalLiability) || 0;
+
+                    });
+
+                    /* ===================================================== */
+
+                    return Object.assign({}, oHeader, {
+
+                        /* FRONTEND CALCULATED TOTALS */
+
+                        TotalBaseAmt: fTotalBaseAmt.toFixed(2),
+                        TotalGstAmt: fTotalGstAmt.toFixed(2),
+                        TotalTdsAmount: fTotalTdsAmount.toFixed(2),
+                        TotalAmtClaimed: fTotalAmtClaimed.toFixed(2),
+                        TotalLiability: fTotalLiability.toFixed(2),
+
+                        /* FILTERED ITEMS */
+
+                        ToItems: {
+                            results: aApprovedItems
+                        }
+
+                    });
+
+                })
+                .filter(Boolean);
 
             console.log(
-              "Headers with HOD Approved items:",
-              aFilteredHeaders.length,
+                "Headers with HOD Approved items:",
+                aFilteredHeaders.length
             );
 
             /* ===================================================== */
@@ -469,9 +508,14 @@ sap.ui.define(
             /* ===================================================== */
 
             if (aFilteredHeaders.length === 0) {
-              MessageToast.show("No HOD Approved records found");
-              this.getView().getModel("treeData").setData({ treeData: [] });
-              return;
+
+                MessageToast.show("No HOD Approved records found");
+
+                this.getView().getModel("treeData").setData({
+                    treeData: []
+                });
+
+                return;
             }
 
             /* ===================================================== */
@@ -479,28 +523,38 @@ sap.ui.define(
             /* ===================================================== */
 
             this._transformExpandedHeaderToTree(aFilteredHeaders);
-          }.bind(this),
 
-          error: function (oError) {
+        }.bind(this),
+
+        error: function (oError) {
+
             console.error(
-              "Error loading PaymentHeaderSet with expand:",
-              oError,
+                "Error loading PaymentHeaderSet with expand:",
+                oError
             );
-            this.getView().getModel("treeData").setData({ treeData: [] });
+
+            this.getView().getModel("treeData").setData({
+                treeData: []
+            });
+
             MessageToast.show("Error loading payment data");
-          }.bind(this),
-        });
-      },
 
-      _transformExpandedHeaderToTree: function (aHeaders) {
-        var aTreeData = aHeaders.map(function (oHeader) {
-          var aItems =
-            oHeader.ToItems && oHeader.ToItems.results
-              ? oHeader.ToItems.results
-              : [];
+        }.bind(this),
+    });
+},
 
-          return {
-            // ===== Header (backend fields) =====
+            _transformExpandedHeaderToTree: function (aHeaders) {
+
+    var aTreeData = aHeaders.map(function (oHeader) {
+
+        var aItems = (oHeader.ToItems && oHeader.ToItems.results)
+            ? oHeader.ToItems.results
+            : [];
+
+        return {
+
+            /* HEADER DATA */
+
             ApprovalNo: oHeader.ApprovalNo,
             CreatedOn: oHeader.CreatedOn,
             ProfitCenter: oHeader.ProfitCenter,
@@ -512,48 +566,67 @@ sap.ui.define(
             CreatedAt: oHeader.CreationTime,
             OverallStatus: oHeader.OverallStatus,
 
-            // ===== Amounts from backend header =====
-            TotalBaseAmt: oHeader.BaseAmount,
-            TotalGstAmt: oHeader.GSTAmount,
-            TotalTdsAmount: oHeader.TDSAmount,
+            /* FRONTEND TOTALS */
+
+            TotalBaseAmt: oHeader.TotalBaseAmt,
+            TotalGstAmt: oHeader.TotalGstAmt,
+            TotalTdsAmount: oHeader.TotalTdsAmount,
             TotalLiability: oHeader.TotalLiability,
-            TotalAmtClaimed: oHeader.AmountClaimed,
+            TotalAmtClaimed: oHeader.TotalAmtClaimed,
 
             ItemCount: aItems.length,
 
             isHeader: true,
+
             displayText:
-              "Approval: " +
-              oHeader.ApprovalNo +
-              " - " +
-              (oHeader.VendorName || ""),
+                "Approval: " +
+                oHeader.ApprovalNo +
+                " - " +
+                (oHeader.VendorName || ""),
+
             Currency: aItems.length > 0 ? aItems[0].Currency : "",
 
-            // ===== Children =====
+            /* CHILD ITEMS */
+
             children: aItems.map(function (oItem) {
-              return Object.assign({}, oItem, {
-                isHeader: false,
-                displayText:
-                  "Item " + oItem.ItemNum + " - " + (oItem.VendorName || ""),
-              });
-            }),
-          };
-        });
 
-        this.getView().getModel("treeData").setData({ treeData: aTreeData });
+                return Object.assign({}, oItem, {
 
-        setTimeout(
-          function () {
-            var oTreeTable = this.byId("idTreeTable");
-            if (oTreeTable && aTreeData.length > 0) {
-              for (var i = 0; i < aTreeData.length; i++) {
+                    isHeader: false,
+
+                    displayText:
+                        "Item " +
+                        oItem.ItemNum +
+                        " - " +
+                        (oItem.VendorName || "")
+
+                });
+
+            })
+
+        };
+
+    });
+
+    this.getView().getModel("treeData").setData({
+        treeData: aTreeData
+    });
+
+    setTimeout(function () {
+
+        var oTreeTable = this.byId("idTreeTable");
+
+        if (oTreeTable && aTreeData.length > 0) {
+
+            for (var i = 0; i < aTreeData.length; i++) {
                 oTreeTable.expand(i);
-              }
             }
-          }.bind(this),
-          100,
-        );
-      },
+
+        }
+
+    }.bind(this), 100);
+
+},
 
       onSwitchShowInLakhsChange: function (oEvent) {
         var oSwitch = oEvent.getSource();

@@ -331,6 +331,7 @@ this.getView().setModel(oLayoutModel, "layoutModel");
         },
 
 _loadPaymentData: function () {
+
     var oModel = this.getView().getModel("oModel");
 
     if (!oModel) {
@@ -344,13 +345,14 @@ _loadPaymentData: function () {
         },
 
         success: function (oData) {
+
             console.log("PaymentHeaderSet raw response:", oData);
 
             var aHeaders = (oData && oData.results) ? oData.results : [];
             console.log("Total Headers count:", aHeaders.length);
 
             /* ===================================================== */
-            /* 🔹 FILTER ONLY ITEMS WHERE PM STATUS = APPROVED      */
+            /* 🔹 FILTER ONLY ITEMS WHERE PM STATUS CONDITION       */
             /* ===================================================== */
 
             var aFilteredHeaders = aHeaders.map(function (oHeader) {
@@ -359,64 +361,105 @@ _loadPaymentData: function () {
                     ? oHeader.ToItems.results
                     : [];
 
-                // 🔹 Keep only items where PM Approval Status = APPROVED
-               var aApprovedItems = aItems.filter(function (oItem) {
-                  // 🔹 Store all approval statuses in order
-                  var aStatuses = [
-                    oItem.Pmapprstatus,
-                    oItem.HodApprStatus,
-                    oItem.CfoApprStatus,
-                    oItem.AudApprStatus,
-                    oItem.DirApprStatus,
-                  ];
+                var aApprovedItems = aItems.filter(function (oItem) {
 
-                  var sLastApprovedStatus = null;
+                    var aStatuses = [
+                        oItem.Pmapprstatus,
+                        oItem.HodApprStatus,
+                        oItem.CfoApprStatus,
+                        oItem.AudApprStatus,
+                        oItem.DirApprStatus
+                    ];
 
-                  // 🔹 Loop to find last approved stage
-                  for (var i = 0; i < aStatuses.length; i++) {
-                    if (aStatuses[i] === "APPROVED") {
-                      sLastApprovedStatus = sLastApprovedStatus + 1; // store index of last approved
+                    var sLastApprovedStatus = null;
+
+                    for (var i = 0; i < aStatuses.length; i++) {
+                        if (aStatuses[i] === "APPROVED") {
+                            sLastApprovedStatus = i;
+                        }
                     }
-                  }
 
-                  // 🔹 If last approved stage is CFO → Skip
-                  // CFO index = 2 (PMA=0, HOD=1, CFO=2)
-                  if (sLastApprovedStatus >= 1 ) {
-                    return false; // Skip this item
-                  }
+                    /* Skip items already approved by HOD or beyond */
+                    if (sLastApprovedStatus >= 1) {
+                        return false;
+                    }
 
-                  return true; // Keep other items
+                    return true;
+
                 });
 
-                // 🔹 If no approved items → skip header
+                /* 🔹 If no valid items → skip header */
                 if (aApprovedItems.length === 0) {
-                  return null;
+                    return null;
                 }
 
+                /* ===================================================== */
+                /* 🔹 CALCULATE HEADER TOTALS FROM FILTERED ITEMS       */
+                /* ===================================================== */
 
-                // 🔹 Return cloned header with only approved items
+                var fTotalBaseAmt = 0;
+                var fTotalGstAmt = 0;
+                var fTotalTdsAmount = 0;
+                var fTotalAmtClaimed = 0;
+                var fTotalLiability = 0;
+
+                aApprovedItems.forEach(function (oItem) {
+
+                    fTotalBaseAmt += parseFloat(oItem.BaseAmt) || 0;
+
+                    fTotalGstAmt += parseFloat(oItem.GstAmt) || 0;
+
+                    fTotalTdsAmount += parseFloat(oItem.TdsAmount) || 0;
+
+                    fTotalAmtClaimed += parseFloat(oItem.AmtClaimed) || 0;
+
+                    fTotalLiability += parseFloat(oItem.TotalLiability) || 0;
+
+                });
+
+                /* ===================================================== */
+                /* 🔹 RETURN HEADER WITH CALCULATED TOTALS              */
+                /* ===================================================== */
+
                 return Object.assign({}, oHeader, {
+
+                    /* FRONTEND CALCULATED TOTALS */
+
+                    TotalBaseAmt: fTotalBaseAmt.toFixed(2),
+                    TotalGstAmt: fTotalGstAmt.toFixed(2),
+                    TotalTdsAmount: fTotalTdsAmount.toFixed(2),
+                    TotalAmtClaimed: fTotalAmtClaimed.toFixed(2),
+                    TotalLiability: fTotalLiability.toFixed(2),
+
+                    /* FILTERED ITEMS */
+
                     ToItems: {
                         results: aApprovedItems
                     }
+
                 });
 
-            }).filter(Boolean); // remove null headers
+            }).filter(Boolean);
 
-            console.log("Headers with PM Approved items:", aFilteredHeaders.length);
+            console.log("Headers after filtering:", aFilteredHeaders.length);
 
             /* ===================================================== */
-            /* 🔹 IF NO APPROVED RECORDS                             */
+            /* 🔹 IF NO RECORDS                                      */
             /* ===================================================== */
 
             if (aFilteredHeaders.length === 0) {
+
                 MessageToast.show("No PM Approved records found");
-                this.getView().getModel("treeData").setData({ treeData: [] });
+
+                this.getView().getModel("treeData").setData({
+                    treeData: []
+                });
+
                 return;
             }
 
             /* ===================================================== */
-            /* 🔹 BIND FILTERED DATA                                 */
+            /* 🔹 BIND DATA                                          */
             /* ===================================================== */
 
             this._transformExpandedHeaderToTree(aFilteredHeaders);
@@ -424,64 +467,104 @@ _loadPaymentData: function () {
         }.bind(this),
 
         error: function (oError) {
+
             console.error("Error loading PaymentHeaderSet with expand:", oError);
-            this.getView().getModel("treeData").setData({ treeData: [] });
-            MessageToast.show("Error loading payment data");
-        }.bind(this)
-    });
-},
 
-        _transformExpandedHeaderToTree: function (aHeaders) {
-            var aTreeData = aHeaders.map(function (oHeader) {
-                var aItems = (oHeader.ToItems && oHeader.ToItems.results) ? oHeader.ToItems.results : [];
-
-                return {
-                    // ===== Header (backend fields) =====
-                    ApprovalNo: oHeader.ApprovalNo,
-                    CreatedOn: oHeader.CreatedOn,
-                    ProfitCenter: oHeader.ProfitCenter,
-                    ProfitCenterName: oHeader.ProfitCenterName,
-                    VendorCode: oHeader.VendorCode,
-                    VendorName: oHeader.VendorName,
-                    CompanyCode: oHeader.CompanyCode,
-                    CreatedBy: oHeader.CreatedBy,
-                    CreatedAt: oHeader.CreationTime,
-                    OverallStatus: oHeader.OverallStatus,
-
-                    // ===== Amounts from backend header =====
-                    TotalBaseAmt: oHeader.BaseAmount,
-                    TotalGstAmt: oHeader.GSTAmount,
-                    TotalTdsAmount: oHeader.TDSAmount,
-                    TotalLiability: oHeader.TotalLiability,
-                    TotalAmtClaimed: oHeader.AmountClaimed,
-
-                    ItemCount: aItems.length,
-
-                    isHeader: true,
-                    displayText: "Approval: " + oHeader.ApprovalNo + " - " + (oHeader.VendorName || ""),
-                    Currency: aItems.length > 0 ? aItems[0].Currency : "",
-
-                    // ===== Children =====
-                    children: aItems.map(function (oItem) {
-                        return Object.assign({}, oItem, {
-                            isHeader: false,
-                            displayText: "Item " + oItem.ItemNum + " - " + (oItem.VendorName || "")
-                        });
-                    })
-                };
+            this.getView().getModel("treeData").setData({
+                treeData: []
             });
 
-            this.getView().getModel("treeData").setData({ treeData: aTreeData });
+            MessageToast.show("Error loading payment data");
 
-            setTimeout(function () {
-                var oTreeTable = this.byId("idTreeTable");
-                if (oTreeTable && aTreeData.length > 0) {
-                    for (var i = 0; i < aTreeData.length; i++) {
-                        oTreeTable.expand(i);
-                    }
-                }
-            }.bind(this), 100);
-        },
+        }.bind(this)
+    });
+
+},
+
+               _transformExpandedHeaderToTree: function (aHeaders) {
+
+    var aTreeData = aHeaders.map(function (oHeader) {
+
+        var aItems = (oHeader.ToItems && oHeader.ToItems.results)
+            ? oHeader.ToItems.results
+            : [];
+
+        return {
+
+            /* HEADER DATA */
+
+            ApprovalNo: oHeader.ApprovalNo,
+            CreatedOn: oHeader.CreatedOn,
+            ProfitCenter: oHeader.ProfitCenter,
+            ProfitCenterName: oHeader.ProfitCenterName,
+            VendorCode: oHeader.VendorCode,
+            VendorName: oHeader.VendorName,
+            CompanyCode: oHeader.CompanyCode,
+            CreatedBy: oHeader.CreatedBy,
+            CreatedAt: oHeader.CreationTime,
+            OverallStatus: oHeader.OverallStatus,
+
+            /* FRONTEND TOTALS */
+
+            TotalBaseAmt: oHeader.TotalBaseAmt,
+            TotalGstAmt: oHeader.TotalGstAmt,
+            TotalTdsAmount: oHeader.TotalTdsAmount,
+            TotalLiability: oHeader.TotalLiability,
+            TotalAmtClaimed: oHeader.TotalAmtClaimed,
+
+            ItemCount: aItems.length,
+
+            isHeader: true,
+
+            displayText:
+                "Approval: " +
+                oHeader.ApprovalNo +
+                " - " +
+                (oHeader.VendorName || ""),
+
+            Currency: aItems.length > 0 ? aItems[0].Currency : "",
+
+            /* CHILD ITEMS */
+
+            children: aItems.map(function (oItem) {
+
+                return Object.assign({}, oItem, {
+
+                    isHeader: false,
+
+                    displayText:
+                        "Item " +
+                        oItem.ItemNum +
+                        " - " +
+                        (oItem.VendorName || "")
+
+                });
+
+            })
+
+        };
+
+    });
+
+    this.getView().getModel("treeData").setData({
+        treeData: aTreeData
+    });
+
+    setTimeout(function () {
+
+        var oTreeTable = this.byId("idTreeTable");
+
+        if (oTreeTable && aTreeData.length > 0) {
+
+            for (var i = 0; i < aTreeData.length; i++) {
+                oTreeTable.expand(i);
+            }
+
+        }
+
+    }.bind(this), 100);
+
+},
 
         onSwitchShowInLakhsChange: function (oEvent) {
             var oSwitch = oEvent.getSource();

@@ -337,6 +337,7 @@ _validateUserRole: function () {
             }
         },
 _loadPaymentData: function () {
+
     var oModel = this.getView().getModel("oModel");
 
     if (!oModel) {
@@ -345,19 +346,16 @@ _loadPaymentData: function () {
     }
 
     oModel.read("/PaymentHeaderSet", {
+
         urlParameters: {
             "$expand": "ToItems"
         },
 
         success: function (oData) {
+
             console.log("PaymentHeaderSet raw response:", oData);
 
             var aHeaders = (oData && oData.results) ? oData.results : [];
-            console.log("Total Headers count:", aHeaders.length);
-
-            /* ===================================================== */
-            /* 🔹 FILTER ITEMS WHERE PM APPROVAL IS BLANK           */
-            /* ===================================================== */
 
             var aFilteredHeaders = aHeaders.map(function (oHeader) {
 
@@ -365,104 +363,171 @@ _loadPaymentData: function () {
                     ? oHeader.ToItems.results
                     : [];
 
-                // 🔹 Keep only items where PM Approval Status is blank
                 var aPendingItems = aItems.filter(function (oItem) {
+
                     return !oItem.PmApprStatus || oItem.PmApprStatus === "";
+
                 });
 
-                // 🔹 If no pending items → skip this header
                 if (aPendingItems.length === 0) {
                     return null;
                 }
 
-                // 🔹 Clone header and attach only pending items
+                /* ============================= */
+                /* FRONTEND TOTAL CALCULATIONS   */
+                /* ============================= */
+
+                var fTotalBaseAmt = 0;
+                var fTotalGstAmt = 0;
+                var fTotalTdsAmt = 0;
+                var fTotalLiability = 0;
+                var fTotalAmtClaimed = 0;
+
+                aPendingItems.forEach(function (oItem) {
+
+                    fTotalBaseAmt += parseFloat(oItem.BaseAmt) || 0;
+                    fTotalGstAmt += parseFloat(oItem.GstAmt) || 0;
+                    fTotalTdsAmt += parseFloat(oItem.TdsAmount) || 0;
+                    fTotalLiability += parseFloat(oItem.TotalLiability) || 0;
+                    fTotalAmtClaimed += parseFloat(oItem.AmtClaimed) || 0;
+
+                });
+
                 return Object.assign({}, oHeader, {
+
+                    /* FRONTEND TOTALS */
+
+                    TotalBaseAmt: fTotalBaseAmt.toFixed(2),
+                    TotalGstAmt: fTotalGstAmt.toFixed(2),
+                    TotalTdsAmount: fTotalTdsAmt.toFixed(2),
+                    TotalLiability: fTotalLiability.toFixed(2),
+                    TotalAmtClaimed: fTotalAmtClaimed.toFixed(2),
+
+                    /* FILTERED ITEMS */
+
                     ToItems: {
                         results: aPendingItems
                     }
+
                 });
 
-            }).filter(Boolean); // remove null headers
-
-            console.log("Headers with pending PM items:", aFilteredHeaders.length);
-
-            /* ===================================================== */
-            /* 🔹 IF NO PENDING RECORDS                              */
-            /* ===================================================== */
+            }).filter(Boolean);
 
             if (aFilteredHeaders.length === 0) {
+
                 MessageToast.show("No pending PM approval items found");
-                this.getView().getModel("treeData").setData({ treeData: [] });
+
+                this.getView().getModel("treeData").setData({
+                    treeData: []
+                });
+
                 return;
             }
-
-            /* ===================================================== */
-            /* 🔹 BIND FILTERED DATA                                 */
-            /* ===================================================== */
 
             this._transformExpandedHeaderToTree(aFilteredHeaders);
 
         }.bind(this),
 
         error: function (oError) {
-            console.error("Error loading PaymentHeaderSet with expand:", oError);
-            this.getView().getModel("treeData").setData({ treeData: [] });
-            MessageToast.show("Error loading payment data");
-        }.bind(this)
-    });
-},
 
-        _transformExpandedHeaderToTree: function (aHeaders) {
-            var aTreeData = aHeaders.map(function (oHeader) {
-                var aItems = (oHeader.ToItems && oHeader.ToItems.results) ? oHeader.ToItems.results : [];
+            console.error("Error loading PaymentHeaderSet:", oError);
 
-                return {
-                    // ===== Header (backend fields) =====
-                    ApprovalNo: oHeader.ApprovalNo,
-                    CreatedOn: oHeader.CreatedOn,
-                    ProfitCenter: oHeader.ProfitCenter,
-                    ProfitCenterName: oHeader.ProfitCenterName,
-                    VendorCode: oHeader.VendorCode,
-                    VendorName: oHeader.VendorName,
-                    CompanyCode: oHeader.CompanyCode,
-                    CreatedBy: oHeader.CreatedBy,
-                    CreatedAt: oHeader.CreationTime,
-                    OverallStatus: oHeader.OverallStatus,
-
-                    // ===== Amounts from backend header =====
-                    TotalBaseAmt: oHeader.BaseAmount,
-                    TotalGstAmt: oHeader.GSTAmount,
-                    TotalTdsAmount: oHeader.TDSAmount,
-                    TotalLiability: oHeader.TotalLiability,
-                    TotalAmtClaimed: oHeader.AmountClaimed,
-
-                    ItemCount: aItems.length,
-
-                    isHeader: true,
-                    displayText: "Approval: " + oHeader.ApprovalNo + " - " + (oHeader.VendorName || ""),
-                    Currency: aItems.length > 0 ? aItems[0].Currency : "",
-
-                    // ===== Children =====
-                    children: aItems.map(function (oItem) {
-                        return Object.assign({}, oItem, {
-                            isHeader: false,
-                            displayText: "Item " + oItem.ItemNum + " - " + (oItem.VendorName || "")
-                        });
-                    })
-                };
+            this.getView().getModel("treeData").setData({
+                treeData: []
             });
 
-            this.getView().getModel("treeData").setData({ treeData: aTreeData });
+            MessageToast.show("Error loading payment data");
 
-            setTimeout(function () {
-                var oTreeTable = this.byId("idTreeTable");
-                if (oTreeTable && aTreeData.length > 0) {
-                    for (var i = 0; i < aTreeData.length; i++) {
-                        oTreeTable.expand(i);
-                    }
-                }
-            }.bind(this), 100);
-        },
+        }.bind(this)
+
+    });
+
+},
+
+       _transformExpandedHeaderToTree: function (aHeaders) {
+
+    var aTreeData = aHeaders.map(function (oHeader) {
+
+        var aItems = (oHeader.ToItems && oHeader.ToItems.results)
+            ? oHeader.ToItems.results
+            : [];
+
+        return {
+
+            /* HEADER DATA */
+
+            ApprovalNo: oHeader.ApprovalNo,
+            CreatedOn: oHeader.CreatedOn,
+            ProfitCenter: oHeader.ProfitCenter,
+            ProfitCenterName: oHeader.ProfitCenterName,
+            VendorCode: oHeader.VendorCode,
+            VendorName: oHeader.VendorName,
+            CompanyCode: oHeader.CompanyCode,
+            CreatedBy: oHeader.CreatedBy,
+            CreatedAt: oHeader.CreationTime,
+            OverallStatus: oHeader.OverallStatus,
+
+            /* FRONTEND TOTALS */
+
+            TotalBaseAmt: oHeader.TotalBaseAmt,
+            TotalGstAmt: oHeader.TotalGstAmt,
+            TotalTdsAmount: oHeader.TotalTdsAmount,
+            TotalLiability: oHeader.TotalLiability,
+            TotalAmtClaimed: oHeader.TotalAmtClaimed,
+
+            ItemCount: aItems.length,
+
+            isHeader: true,
+
+            displayText:
+                "Approval: " +
+                oHeader.ApprovalNo +
+                " - " +
+                (oHeader.VendorName || ""),
+
+            Currency: aItems.length > 0 ? aItems[0].Currency : "",
+
+            /* CHILD ITEMS */
+
+            children: aItems.map(function (oItem) {
+
+                return Object.assign({}, oItem, {
+
+                    isHeader: false,
+
+                    displayText:
+                        "Item " +
+                        oItem.ItemNum +
+                        " - " +
+                        (oItem.VendorName || "")
+
+                });
+
+            })
+
+        };
+
+    });
+
+    this.getView().getModel("treeData").setData({
+        treeData: aTreeData
+    });
+
+    setTimeout(function () {
+
+        var oTreeTable = this.byId("idTreeTable");
+
+        if (oTreeTable && aTreeData.length > 0) {
+
+            for (var i = 0; i < aTreeData.length; i++) {
+                oTreeTable.expand(i);
+            }
+
+        }
+
+    }.bind(this), 100);
+
+},
 
         onSwitchShowInLakhsChange: function (oEvent) {
             var oSwitch = oEvent.getSource();
