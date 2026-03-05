@@ -1633,256 +1633,356 @@ onDeleteLayout: function (oEvent) {
             console.log("Director Remarks updated in tree data model:", sNewValue);
         },
 
-        _processBulkAction: function (aSelectedItems, sActionType) {
-            console.log("=== _processBulkAction CALLED ===");
-            console.log("Selected Items Count:", aSelectedItems.length);
-            console.log("Action Type:", sActionType);
-            console.log("Selected Items:", aSelectedItems);
+       _processBulkAction: function (aSelectedItems, sActionType) {
+  console.log("=== _processBulkAction CALLED ===");
 
-            var oTreeModel = this.getView().getModel("treeData");
-            var aTreeData = oTreeModel.getData().treeData;
-            var sStatus = sActionType === "APPROVE" ? "APPROVED" : "REJECTED";
-            var sDefaultRemarks = sActionType === "APPROVE" ? "Approved via bulk action" : "Rejected via bulk action";
+  var oTreeModel = this.getView().getModel("treeData");
+  if (!oTreeModel) {
+    sap.m.MessageToast.show("Tree model not found");
+    return;
+  }
 
-            // Prepare payload with all line item details
-            var aPayloadItems = [];
+  var aTreeData = oTreeModel.getProperty("/treeData") || [];
 
-            console.log("=== BUILDING PAYLOAD ITEMS ===");
+  var sStatus = sActionType === "APPROVE" ? "APPROVED" : "REJECTED";
 
-            aSelectedItems.forEach(function (oSelectedItem, iIndex) {
-                console.log("Processing selected item " + (iIndex + 1) + ":", oSelectedItem);
+  var sDefaultRemarks =
+    sActionType === "APPROVE"
+      ? "Approved via bulk action"
+      : "Rejected via bulk action";
 
-                if (!oSelectedItem.isHeader) {
-                    // Individual item selected
-                    console.log("  -> Individual item selected");
-                    var oPayloadItem = this._createPayloadItem(oSelectedItem, sStatus, sDefaultRemarks);
-                    aPayloadItems.push(oPayloadItem);
-                    console.log("  -> Payload item created:", oPayloadItem);
-                } else {
-                    // Header selected - include all its children
-                    console.log("  -> Header selected, processing children");
-                    var oHeader = this._findHeaderInTreeData(aTreeData, oSelectedItem.ApprovalNo);
-                    if (oHeader && oHeader.children) {
-                        console.log("  -> Found header with " + oHeader.children.length + " children");
-                        oHeader.children.forEach(function (oChildItem, iChildIndex) {
-                            console.log("    -> Processing child " + (iChildIndex + 1) + ":", oChildItem);
-                            var oPayloadItem = this._createPayloadItem(oChildItem, sStatus, sDefaultRemarks);
-                            aPayloadItems.push(oPayloadItem);
-                            console.log("    -> Child payload item created:", oPayloadItem);
-                        }.bind(this));
-                    } else {
-                        console.log("  -> No header found or no children");
-                    }
-                }
-            }.bind(this));
+  var aPayloadItems = [];
+  var oHeader = null;
 
-            console.log("=== FINAL PAYLOAD ITEMS ===");
-            console.log("Total payload items:", aPayloadItems.length);
-            console.log("Payload items array:", aPayloadItems);
+  // Used to avoid duplicates
+  var oProcessedItems = new Set();
 
-            if (aPayloadItems.length === 0) {
-                console.error("❌ NO PAYLOAD ITEMS CREATED!");
-                MessageToast.show("No items to process");
-                return;
-            }
+  aSelectedItems.forEach(
+    function (oSelectedItem) {
 
-            // Send payload to backend
-            console.log("=== CALLING _sendApprovalPayloadToBackend ===");
-            //this._sendApprovalPayloadToBackend(aPayloadItems, sActionType, aSelectedItems);
-            this._sendDeepApprovalPayload(aPayloadItems, sActionType);
-        },
-_sendDeepApprovalPayload: function (aPayloadItems, sActionType) {
-        var oModel = this.getView().getModel("oModel");
+      if (!oSelectedItem) {
+        return;
+      }
 
-        if (
-          !oModel ||
-          !Array.isArray(aPayloadItems) ||
-          aPayloadItems.length === 0
-        ) {
-          sap.m.MessageToast.show("No data to send");
+      /* ================= ITEM SELECTED ================= */
+
+      if (!oSelectedItem.isHeader) {
+
+        var sItemKey = oSelectedItem.ApprovalNo + "_" + oSelectedItem.ItemNum;
+
+        if (!oProcessedItems.has(sItemKey)) {
+
+          if (!oHeader) {
+            oHeader = this._findHeaderInTreeData(
+              aTreeData,
+              oSelectedItem.ApprovalNo
+            );
+          }
+
+          var oPayloadItem = this._createPayloadItem(
+            oSelectedItem,
+            sStatus,
+            sDefaultRemarks
+          );
+
+          aPayloadItems.push(oPayloadItem);
+
+          oProcessedItems.add(sItemKey);
+        }
+      }
+
+      /* ================= HEADER SELECTED ================= */
+
+      else {
+
+        var oFoundHeader = this._findHeaderInTreeData(
+          aTreeData,
+          oSelectedItem.ApprovalNo
+        );
+
+        if (!oFoundHeader) {
           return;
         }
 
-        /* ================= HELPERS ================= */
+        if (!oHeader) {
+          oHeader = oFoundHeader;
+        }
 
-        var dec = function (v) {
-          return v !== undefined && v !== null && v !== ""
-            ? Number(v).toFixed(2)
-            : "0.00";
-        };
+        if (Array.isArray(oFoundHeader.children)) {
 
-        // SAP Gateway Edm.DateTime (V2)
-        var toEdmDateTime = function (v) {
-          if (!v) return null;
-          var d = new Date(v);
-          return isNaN(d.getTime()) ? null : "/Date(" + d.getTime() + ")/";
-        };
+          oFoundHeader.children.forEach(
+            function (oChildItem) {
 
-        /* ================= HEADER ================= */
+              var sItemKey =
+                oChildItem.ApprovalNo + "_" + oChildItem.ItemNum;
 
-        var oFirst = aPayloadItems[0];
-        var sApprovalNo = String(oFirst.ApprovalNo).trim();
-        var sVendorCode = String(
-          oFirst.VendorCode || oFirst.VendorNumber,
-        ).trim();
+              if (!oProcessedItems.has(sItemKey)) {
 
-        var oDeepPayload = {
-          ApprovalNo: sApprovalNo,
-          CreatedOn: null,
-          ProfitCenter: oFirst.ProfitCenter || "",
-          ProfitCenterName: oFirst.ProfitCenterName || "",
-          VendorCode: sVendorCode,
-          VendorName: oFirst.VendorName || "",
-          CompanyCode: oFirst.CompanyCode || "",
-          CreatedBy: "",
-          CreationTime: "PT00H00M00S",
+                var oPayloadItem = this._createPayloadItem(
+                  oChildItem,
+                  sStatus,
+                  sDefaultRemarks
+                );
 
-          OverallStatus: "DIR_APPR",
+                aPayloadItems.push(oPayloadItem);
 
-          GrossAmount: dec(oFirst.GrossAmount),
-          BaseAmount: dec(oFirst.BaseAmount),
-          GSTAmount: dec(oFirst.GSTAmount),
-          TDSAmount: dec(oFirst.TDSAmount),
-          TotalLiability: dec(oFirst.TotalLiability),
-          GST2AReflected: dec(oFirst.GST2AReflected),
-          GST2ANotReflected: dec(oFirst.GST2ANotReflected),
-          AmountClaimed: dec(oFirst.AmountClaimed),
-          ProposedAmount: dec(oFirst.ProposedAmount),
-
-          PMApprovedAmount: dec(oFirst.PMApprovedAmount),
-          HODApprovedAmount: dec(oFirst.HODApprovedAmount),
-          CFOApprovedAmount: dec(oFirst.CFOApprovedAmount),
-          AuditorApprovedAmount: dec(oFirst.AuditorApprovedAmount),
-          DirectorApprovedAmount: dec(oFirst.DirectorApprovedAmount),
-
-          /* ================= ITEMS ================= */
-
-          ToItems: {
-            results: aPayloadItems.map(function (oItem) {
-              var oMappedItem = {
-                ApprovalNo: sApprovalNo,
-                Completed: "X",
-                ProfitCenter: oItem.ProfitCenter || "",
-                TaxNum: oItem.TaxNum || "",
-                ProfitCenterName: oItem.ProfitCenterName || "",
-                BankKey: oItem.BankKey || "",
-                VendorCode: sVendorCode,
-                VendorName: oItem.VendorName || "",
-                DocNum: oItem.DocNum || "",
-                ItemNum: String(oItem.ItemNum),
-                LiabHead: oItem.LiabHead || "",
-                ReferenceDoc: oItem.ReferenceDoc || "",
-                PurchDoc: oItem.PurchDoc || "",
-
-                DocDate: toEdmDateTime(oItem.DocDate),
-                PostingDt: toEdmDateTime(oItem.PostingDt),
-
-                GrossAmt: dec(oItem.GrossAmt),
-                BaseAmt: dec(oItem.BaseAmt),
-                GstAmt: dec(oItem.GstAmt),
-                TdsAmount: dec(oItem.TdsAmount),
-                TotalLiability: dec(oItem.TotalLiability),
-
-                Gst2aRef: dec(oItem.Gst2aRef),
-                Gst2aNref: dec(oItem.Gst2aNref),
-                AmtClaimed: dec(oItem.AmtClaimed),
-                AprnoRef: oItem.AprnoRef || "",
-                ProposedAmt: dec(oItem.ProposedAmt),
-
-                Currency: oItem.Currency || "",
-                Gstr1Details: oItem.Gstr1Details || "",
-                Remark: oItem.Remark || "",
-
-                AccountHolder: oItem.AccountHolder || "",
-                AccountNumber: oItem.AccountNumber || "",
-                BankName: oItem.BankName || "",
-                Branch: oItem.Branch || "",
-
-                /* ===== PM ===== */
-                PmApprAmt: dec(oItem.PmApprAmt),
-                PmUserId: oItem.PmUserId || "",
-                PmApprStatus: oItem.PmApprStatus || "",
-                PmApprOn: toEdmDateTime(oItem.PmApprOn),
-                PmApprRemarks: oItem.PmApprRemarks || "",
-
-                /* ===== HOD ===== */
-                HodApprAmt: dec(oItem.HodApprAmt || "0.00"),
-                HodUserId: oItem.HodUserId || "",
-                HodApprStatus: oItem.HodApprStatus || "",
-
-                HodApprOn: oItem.HodApprOn
-                  ? toEdmDateTime(oItem.HodApprOn)
-                  : null,
-                HodApprRemarks: oItem.HodApprRemarks || "",
-
-                /* ===== CFO ===== */
-                CfoApprAmt: dec(oItem.CfoApprAmt || "0.00"),
-                CfoUserId: oItem.CfoUserId || "",
-                CfoApprStatus: oItem.CfoApprStatus || "",
-                CfoApprOn: oItem.CfoApprOn
-                  ? toEdmDateTime(oItem.CfoApprOn)
-                  : null,
-                CfoApprRemarks: oItem.CfoApprRemarks || "",
-
-                /* ===== AUDITOR ===== */
-                AudApprAmt: dec(oItem.AudApprAmt || "0.00"),
-                AudUserId: oItem.AudUserId || "",
-                AudApprStatus: oItem.AudApprStatus || "",
-                AudApprOn: oItem.AudApprOn
-                  ? toEdmDateTime(oItem.AudApprOn)
-                  : null,
-                AudApprRemarks: oItem.AudApprRemarks || "",
-
-                /* ===== DIRECTOR ===== */
-                DirApprAmt: dec(oItem.DirApprAmt || "0.00"),
-                DirUserId: oItem.DirUserId || "",
-                DirApprStatus: oItem.DirApprStatus || "",
-                DirApprOn: oItem.DirApprOn
-                  ? toEdmDateTime(oItem.DirApprOn)
-                  : null,
-                DirApprRemarks: oItem.DirApprRemarks || "",
-
-                ModeOfPayment: "",
-                BalancePayable: "0.00",
-                TotalBalOut: dec(oItem.TotalBalOut || "0.00"),
-                RejectionIndicator: "",
-                RejectedBy: "",
-                RejectionDate: null,
-                RejectorDesignation: "",
-              };
-
-              /* ================= REJECTION FIELDS (ONLY IF REJECT) ================= */
-
-              if (sActionType === "REJECT") {
-                oMappedItem.RejectionIndicator = "X";
-                oMappedItem.RejectedBy = oItem.CfoUserId || "";
-                oMappedItem.RejectionDate = toEdmDateTime(new Date());
-                oMappedItem.RejectorDesignation = "CFO";
+                oProcessedItems.add(sItemKey);
               }
 
-              return oMappedItem;
-            }),
-          },
+            }.bind(this)
+          );
+
+        }
+
+      }
+
+    }.bind(this)
+  );
+
+  console.log("Payload Items:", aPayloadItems);
+  console.log("Header:", oHeader);
+
+  if (aPayloadItems.length === 0) {
+    sap.m.MessageToast.show("No items to process");
+    return;
+  }
+
+  /* ================= SEND TO BACKEND ================= */
+
+  this._sendDeepApprovalPayload(aPayloadItems, sActionType, oHeader);
+},    
+_sendDeepApprovalPayload: function (aPayloadItems, sActionType, oHeader) {
+
+  var oModel = this.getView().getModel("oModel");
+
+  if (!oModel || !Array.isArray(aPayloadItems) || aPayloadItems.length === 0) {
+    sap.m.MessageToast.show("No data to send");
+    return;
+  }
+
+  /* ================= HELPERS ================= */
+
+  var dec = function (v) {
+    var n = Number(v);
+    return isNaN(n) ? "0.00" : n.toFixed(2);
+  };
+
+  /* ===== DateTime formatter ===== */
+
+  var toEdmDateTime = function (v) {
+    if (!v) return null;
+
+    if (typeof v === "string" && v.indexOf("/Date(") === 0) {
+      return v;
+    }
+
+    var d = new Date(v);
+    return isNaN(d.getTime()) ? null : "/Date(" + d.getTime() + ")/";
+  };
+
+  /* ===== Time formatter (FIXED) ===== */
+
+  var toEdmTime = function (v) {
+
+    if (!v) return "PT00H00M00S";
+
+    var d = new Date(v);
+
+    var h = String(d.getHours()).padStart(2, "0");
+    var m = String(d.getMinutes()).padStart(2, "0");
+    var s = String(d.getSeconds()).padStart(2, "0");
+
+    return "PT" + h + "H" + m + "M" + s + "S";
+  };
+
+  /* ================= HEADER ================= */
+
+  var oFirst = aPayloadItems[0];
+
+  var sApprovalNo = (oFirst.ApprovalNo || "").trim();
+  var sVendorCode = (oFirst.VendorCode || oFirst.VendorNumber || "").trim();
+
+  var oDeepPayload = {
+
+    ApprovalNo: sApprovalNo,
+
+    CreatedOn: toEdmDateTime(oHeader.CreatedOn),
+
+    ProfitCenter: oFirst.ProfitCenter || "",
+    ProfitCenterName: oFirst.ProfitCenterName || "",
+
+    VendorCode: sVendorCode,
+    VendorName: oFirst.VendorName || "",
+    CompanyCode: oFirst.CompanyCode || "",
+
+    CreatedBy: oHeader.CreatedBy || "",
+
+    /* FIXED TIME FORMAT */
+
+    CreationTime: oHeader.CreationTime || toEdmTime(new Date()),
+
+    OverallStatus: "PM_APPR",
+
+    GrossAmount: dec(oFirst.GrossAmount),
+    BaseAmount: dec(oFirst.BaseAmount),
+    GSTAmount: dec(oFirst.GSTAmount),
+    TDSAmount: dec(oFirst.TDSAmount),
+    TotalLiability: dec(oFirst.TotalLiability),
+
+    GST2AReflected: dec(oFirst.GST2AReflected),
+    GST2ANotReflected: dec(oFirst.GST2ANotReflected),
+
+    AmountClaimed: dec(oFirst.AmountClaimed),
+    ProposedAmount: dec(oFirst.ProposedAmount),
+
+    PMApprovedAmount: dec(oFirst.PMApprovedAmount),
+    HODApprovedAmount: dec(oFirst.HODApprovedAmount),
+    CFOApprovedAmount: dec(oFirst.CFOApprovedAmount),
+    AuditorApprovedAmount: dec(oFirst.AuditorApprovedAmount),
+    DirectorApprovedAmount: dec(oFirst.DirectorApprovedAmount),
+
+    /* ================= ITEMS ================= */
+
+    ToItems: {
+      results: aPayloadItems.map(function (oItem) {
+
+        var oMappedItem = {
+
+          ApprovalNo: sApprovalNo,
+          Completed: "X",
+
+          ProfitCenter: oItem.ProfitCenter || "",
+          ProfitCenterName: oItem.ProfitCenterName || "",
+          TaxNum: oItem.TaxNum || "",
+
+          CreatedOn: toEdmDateTime(oHeader.CreatedOn),
+
+          VendorCode: sVendorCode,
+          VendorName: oItem.VendorName || "",
+
+          BankKey: oItem.BankKey || "",
+          DocNum: oItem.DocNum || "",
+          ItemNum: String(oItem.ItemNum || ""),
+
+          LiabHead: oItem.LiabHead || "",
+          ReferenceDoc: oItem.ReferenceDoc || "",
+          PurchDoc: oItem.PurchDoc || "",
+
+          DocDate: toEdmDateTime(oItem.DocDate),
+          PostingDt: toEdmDateTime(oItem.PostingDt),
+
+          GrossAmt: dec(oItem.GrossAmt),
+          BaseAmt: dec(oItem.BaseAmt),
+          GstAmt: dec(oItem.GstAmt),
+          TdsAmount: dec(oItem.TdsAmount),
+          TotalLiability: dec(oItem.TotalLiability),
+
+          Gst2aRef: dec(oItem.Gst2aRef),
+          Gst2aNref: dec(oItem.Gst2aNref),
+
+          AmtClaimed: dec(oItem.AmtClaimed),
+          AprnoRef: oItem.AprnoRef || "",
+          ProposedAmt: dec(oItem.ProposedAmt),
+
+          Currency: oItem.Currency || "",
+          Gstr1Details: oItem.Gstr1Details || "",
+          Remark: oItem.Remark || "",
+
+          AccountHolder: oItem.AccountHolder || "",
+          AccountNumber: oItem.AccountNumber || "",
+          BankName: oItem.BankName || "",
+          Branch: oItem.Branch || "",
+
+          /* ===== PM ===== */
+
+          PmApprAmt: dec(oItem.PmApprAmt),
+          PmUserId: oItem.PmUserId || "",
+          PmApprStatus: oItem.PmApprStatus || "",
+          PmApprOn: toEdmDateTime(oItem.PmApprOn),
+          PmApprRemarks: oItem.PmApprRemarks || "",
+
+          /* ===== HOD ===== */
+
+          HodApprAmt: dec(oItem.HodApprAmt),
+          HodUserId: oItem.HodUserId || "",
+          HodApprStatus: oItem.HodApprStatus || "",
+          HodApprOn: toEdmDateTime(oItem.HodApprOn),
+          HodApprRemarks: oItem.HodApprRemarks || "",
+
+          /* ===== CFO ===== */
+
+          CfoApprAmt: dec(oItem.CfoApprAmt),
+          CfoUserId: oItem.CfoUserId || "",
+          CfoApprStatus: oItem.CfoApprStatus || "",
+          CfoApprOn: toEdmDateTime(oItem.CfoApprOn),
+          CfoApprRemarks: oItem.CfoApprRemarks || "",
+
+          /* ===== AUDITOR ===== */
+
+          AudApprAmt: dec(oItem.AudApprAmt),
+          AudUserId: oItem.AudUserId || "",
+          AudApprStatus: oItem.AudApprStatus || "",
+          AudApprOn: toEdmDateTime(oItem.AudApprOn),
+          AudApprRemarks: oItem.AudApprRemarks || "",
+
+          /* ===== DIRECTOR ===== */
+
+          DirApprAmt: dec(oItem.DirApprAmt),
+          DirUserId: oItem.DirUserId || "",
+          DirApprStatus: oItem.DirApprStatus || "",
+          DirApprOn: toEdmDateTime(oItem.DirApprOn),
+          DirApprRemarks: oItem.DirApprRemarks || "",
+
+          ModeOfPayment: "",
+          BalancePayable: "0.00",
+          TotalBalOut: dec(oItem.TotalBalOut),
+
+          RejectionIndicator: "",
+          RejectedBy: "",
+          RejectionDate: null,
+          RejectorDesignation: ""
         };
 
-        console.log("🚀 FINAL DEEP CREATE PAYLOAD (MATCHED)");
-        console.log(JSON.stringify(oDeepPayload, null, 2));
+        if (sActionType === "REJECT") {
+  oMappedItem.RejectionIndicator = "X";
+  oMappedItem.RejectedBy = oItem.DirUserId || "";
+  oMappedItem.RejectionDate = toEdmDateTime(new Date());
+  oMappedItem.RejectorDesignation = "DIR";
+}
 
-        sap.ui.core.BusyIndicator.show(0);
+        return oMappedItem;
 
-        oModel.create("/PaymentHeaderSet", oDeepPayload, {
-          success: function () {
-            sap.ui.core.BusyIndicator.hide();
-            sap.m.MessageToast.show("Submitted successfully");
-            this._loadPaymentData();
-          }.bind(this),
-          error: function (oError) {
-            sap.ui.core.BusyIndicator.hide();
-            console.error("❌ Deep create failed", oError);
-            sap.m.MessageBox.error("Backend update failed");
-          },
-        });
-      },
+      })
+    }
+  };
+
+  console.log("🚀 FINAL DEEP CREATE PAYLOAD");
+  console.log(JSON.stringify(oDeepPayload, null, 2));
+
+  sap.ui.core.BusyIndicator.show(0);
+
+  oModel.create("/PaymentHeaderSet", oDeepPayload, {
+
+    success: function () {
+
+      sap.ui.core.BusyIndicator.hide();
+      sap.m.MessageToast.show("Submitted successfully");
+
+      this._loadPaymentData();
+
+    }.bind(this),
+
+    error: function (oError) {
+
+      sap.ui.core.BusyIndicator.hide();
+      console.error("❌ Deep create failed", oError);
+      sap.m.MessageBox.error("Backend update failed");
+
+    }
+
+  });
+
+},
 
       _createPayloadItem: function (oItem, sStatus, sDefaultRemarks) {
         console.log("=== _createPayloadItem CALLED ===");
