@@ -1868,7 +1868,7 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType, oHeader) {
 
     CreationTime: oHeader.CreationTime || toEdmTime(new Date()),
 
-    OverallStatus: "PM_APPR",
+    OverallStatus: "HOD_APPR",
 
     GrossAmount: dec(oFirst.GrossAmount),
     BaseAmount: dec(oFirst.BaseAmount),

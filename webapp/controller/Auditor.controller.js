@@ -1906,7 +1906,7 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType, oHeader) {
 
     CreationTime: oHeader.CreationTime || toEdmTime(new Date()),
 
-    OverallStatus: "PM_APPR",
+    OverallStatus: "AUD_APPR",
 
     GrossAmount: dec(oFirst.GrossAmount),
     BaseAmount: dec(oFirst.BaseAmount),
@@ -4590,7 +4590,7 @@ _sendDeepApprovalPayload: function (aPayloadItems, sActionType, oHeader) {
           if (
             sStatus === "APPROVED" ||
             sStatus === "APPROVE" ||
-            sStatus === "PM_APPR"
+            sStatus === "AUD_APPR"
           ) {
             return "Success";
           }
