@@ -1601,50 +1601,87 @@ onDeleteLayout: function (oEvent) {
         },
 
 _processBulkAction: function (aSelectedItems, sActionType) {
-  console.log("=== _processBulkAction CALLED ===");
+
+  console.log("========== BULK ACTION START ==========");
+  console.log("Action Type:", sActionType);
+  console.log("Selected Items Count:", aSelectedItems.length);
+  console.log("Selected Items:", aSelectedItems);
 
   var oTreeModel = this.getView().getModel("treeData");
+  console.log("Tree Model:", oTreeModel);
+
   if (!oTreeModel) {
+    console.error("Tree model not found!");
     sap.m.MessageToast.show("Tree model not found");
     return;
   }
 
   var aTreeData = oTreeModel.getProperty("/treeData") || [];
+  console.log("Tree Data Loaded:", aTreeData);
+  console.log("Total Headers in Tree:", aTreeData.length);
 
   var sStatus = sActionType === "APPROVE" ? "APPROVED" : "REJECTED";
+  console.log("Derived Status:", sStatus);
 
   var sDefaultRemarks =
     sActionType === "APPROVE"
       ? "Approved via bulk action"
       : "Rejected via bulk action";
 
+  console.log("Default Remarks:", sDefaultRemarks);
+
   var aPayloadItems = [];
   var oHeader = null;
 
+  console.log("Initial Payload Array:", aPayloadItems);
+  console.log("Initial Header:", oHeader);
+
   // Used to avoid duplicates
   var oProcessedItems = new Set();
+  console.log("Processed Items Set Initialized:", oProcessedItems);
 
   aSelectedItems.forEach(
-    function (oSelectedItem) {
+    function (oSelectedItem, index) {
+
+      console.log("------------ LOOP START ------------");
+      console.log("Current Index:", index);
+      console.log("Selected Item Object:", oSelectedItem);
 
       if (!oSelectedItem) {
+        console.warn("Selected item is empty, skipping...");
         return;
       }
+
+      console.log("Is Header:", oSelectedItem.isHeader);
+      console.log("ApprovalNo:", oSelectedItem.ApprovalNo);
+      console.log("ItemNum:", oSelectedItem.ItemNum);
 
       /* ================= ITEM SELECTED ================= */
 
       if (!oSelectedItem.isHeader) {
 
-        var sItemKey = oSelectedItem.ApprovalNo + "_" + oSelectedItem.ItemNum;
+        console.log("Item row selected");
+
+        var sItemKey = oSelectedItem.DocNum + "_" + oSelectedItem.ItemNum;
+        console.log("Generated Item Key:", sItemKey);
 
         if (!oProcessedItems.has(sItemKey)) {
 
+          console.log("Item not processed yet");
+
           if (!oHeader) {
+
+            console.log("Header not yet assigned. Searching header...");
+
             oHeader = this._findHeaderInTreeData(
               aTreeData,
               oSelectedItem.ApprovalNo
             );
+
+            console.log("Header Found:", oHeader);
           }
+
+          console.log("Creating payload item...");
 
           var oPayloadItem = this._createPayloadItem(
             oSelectedItem,
@@ -1652,9 +1689,18 @@ _processBulkAction: function (aSelectedItems, sActionType) {
             sDefaultRemarks
           );
 
+          console.log("Payload Item Created:", oPayloadItem);
+
           aPayloadItems.push(oPayloadItem);
+          console.log("Payload pushed. Current Payload:", aPayloadItems);
 
           oProcessedItems.add(sItemKey);
+          console.log("Item marked as processed:", sItemKey);
+
+        } else {
+
+          console.warn("Duplicate item detected, skipping:", sItemKey);
+
         }
       }
 
@@ -1662,28 +1708,45 @@ _processBulkAction: function (aSelectedItems, sActionType) {
 
       else {
 
+        console.log("Header row selected");
+
         var oFoundHeader = this._findHeaderInTreeData(
           aTreeData,
           oSelectedItem.ApprovalNo
         );
 
+        console.log("Found Header:", oFoundHeader);
+
         if (!oFoundHeader) {
+          console.warn("Header not found in tree data!");
           return;
         }
 
         if (!oHeader) {
           oHeader = oFoundHeader;
+          console.log("Main Header Assigned:", oHeader);
         }
 
         if (Array.isArray(oFoundHeader.children)) {
 
+          console.log("Header Children Found:", oFoundHeader.children.length);
+          console.log("Children List:", oFoundHeader.children);
+
           oFoundHeader.children.forEach(
-            function (oChildItem) {
+            function (oChildItem, childIndex) {
+
+              console.log("---- Processing Child ----");
+              console.log("Child Index:", childIndex);
+              console.log("Child Item:", oChildItem);
 
               var sItemKey =
                 oChildItem.ApprovalNo + "_" + oChildItem.ItemNum;
 
+              console.log("Generated Child Item Key:", sItemKey);
+
               if (!oProcessedItems.has(sItemKey)) {
+
+                console.log("Child item not processed yet");
 
                 var oPayloadItem = this._createPayloadItem(
                   oChildItem,
@@ -1691,32 +1754,61 @@ _processBulkAction: function (aSelectedItems, sActionType) {
                   sDefaultRemarks
                 );
 
+                console.log("Child Payload Item:", oPayloadItem);
+
                 aPayloadItems.push(oPayloadItem);
+                console.log("Payload pushed. Current Payload:", aPayloadItems);
 
                 oProcessedItems.add(sItemKey);
+                console.log("Child item marked processed:", sItemKey);
+
+              } else {
+
+                console.warn("Duplicate child item skipped:", sItemKey);
+
               }
 
             }.bind(this)
           );
 
+        } else {
+
+          console.warn("Header has no children!");
+
         }
 
       }
 
+      console.log("------------ LOOP END ------------");
+
     }.bind(this)
   );
 
-  console.log("Payload Items:", aPayloadItems);
-  console.log("Header:", oHeader);
+  console.log("========== LOOP COMPLETE ==========");
+  console.log("Final Payload Items:", aPayloadItems);
+  console.log("Total Payload Items:", aPayloadItems.length);
+  console.log("Final Header Object:", oHeader);
+  console.log("Processed Item Keys:", oProcessedItems);
 
   if (aPayloadItems.length === 0) {
+
+    console.warn("No items found to process!");
+
     sap.m.MessageToast.show("No items to process");
     return;
   }
 
+  console.log("Sending payload to backend...");
+  console.log("Payload:", aPayloadItems);
+  console.log("Action Type:", sActionType);
+  console.log("Header:", oHeader);
+
   /* ================= SEND TO BACKEND ================= */
 
   this._sendDeepApprovalPayload(aPayloadItems, sActionType, oHeader);
+
+  console.log("========== BULK ACTION END ==========");
+
 },    
 _sendDeepApprovalPayload: function (aPayloadItems, sActionType, oHeader) {
 

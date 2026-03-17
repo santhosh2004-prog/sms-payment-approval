@@ -214,7 +214,7 @@
                     <!-- ================= Liability Head (Item) ================= -->
                     <table:Column
                         id="colLiabilityHead"
-                        label="Liability Head (Dropdown)"
+                        label="Liability Head "
                         width="180px"
                         filterProperty="LiabHead"
                     >
@@ -304,7 +304,7 @@
                     <!-- ================= Gross Amount (Header + Item) ================= -->
                     <table:Column
                         id="colGrossAmt"
-                        label="Gross Amount"
+                        label="Base Amount"
                         width="130px"
                         hAlign="End"
                         filterProperty="TotalBaseAmt"
@@ -414,67 +414,67 @@
                     </table:Column>
 
                     <!-- ================= GST Amount reflected in GSTR 2A ================= -->
-                    <table:Column
-                        id="colGst2aRef"
-                        label="GST Amount reflected in GSTR 2A"
-                        width="150px"
-                        hAlign="End"
-                        filterProperty="Gst2aRef"
-                    >
-                        <table:template>
-                            <m:VBox>
-                                <!-- Header Row (Total) -->
-                                <m:Text
-                                    text="{parts: [{path: 'treeData>Gst2aRef'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
-                                    visible="{treeData>isHeader}"
-                                    class="sapThemeHighlight-asTextColor"
-                                />
+                   <table:Column
+    id="colGst2aRef"
+    label="GST Amount reflected in GSTR 2A"
+    width="150px"
+    hAlign="End"
+    filterProperty="Gst2aRef"
+>
+    <table:template>
+        <m:VBox>
+            <!-- Header Row (Total) -->
+            <m:Text
+                text="{parts: [{path: 'treeData>Gst2aRef'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                visible="{treeData>isHeader}"
+                class="sapThemeHighlight-asTextColor"
+            />
 
-                                <!-- Editable Row -->
-                                <m:Input
-                                    value="{treeData>Gst2aRef}"
-                                    visible="{= !${treeData>isHeader} }"
-                                    type="Number"
-                                    width="100%"
-                                    placeholder="0.00"
-                                    textAlign="End"
-                                    change="onGst2aRefChange"
-                                />
-                            </m:VBox>
-                        </table:template>
-                    </table:Column>
+            <!-- Editable Row -->
+            <m:Input
+                value="{treeData>Gst2aRef}"
+                visible="{= !${treeData>isHeader} }"
+                type="Number"
+                width="100%"
+                placeholder="0.00"
+                textAlign="End"
+                change="onGst2aRefChange"
+            />
+        </m:VBox>
+    </table:template>
+</table:Column>
 
-                    <!-- ================= GST Amount not reflected in GSTR 2A ================= -->
-                    <table:Column
-                        id="colGst2aNref"
-                        label="GST Amount not reflected in GSTR 2A"
-                        width="150px"
-                        hAlign="End"
-                        filterProperty="Gst2aNref"
-                    >
-                        <table:template>
-                            <m:VBox>
-                                <!-- Header Row (Total) -->
-                                <m:Text
-                                    text="{parts: [{path: 'treeData>Gst2aNref'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
-                                    visible="{treeData>isHeader}"
-                                    class="sapThemeHighlight-asTextColor"
-                                />
+<!-- ================= GST Amount not reflected in GSTR 2A ================= -->
 
-                                <!-- Editable Row -->
-                                <m:Input
-                                    value="{treeData>Gst2aNref}"
-                                    visible="{= !${treeData>isHeader} }"
-                                    type="Number"
-                                    width="100%"
-                                    placeholder="0.00"
-                                    textAlign="End"
-                                    change="onGst2aNrefChange"
-                                />
-                            </m:VBox>
-                        </table:template>
-                    </table:Column>
+<table:Column
+    id="colGst2aNref"
+    label="GST Amount not reflected in GSTR 2A"
+    width="150px"
+    hAlign="End"
+    filterProperty="Gst2aNref"
+>
+    <table:template>
+        <m:VBox>
+            <!-- Header Row (Total) -->
+            <m:Text
+                text="{parts: [{path: 'treeData>Gst2aNref'}, {path: 'viewState>/showInLakhs'}], formatter: '.formatter.formatCurrency'}"
+                visible="{treeData>isHeader}"
+                class="sapThemeHighlight-asTextColor"
+            />
 
+            <!-- Editable Row -->
+            <m:Input
+                value="{treeData>Gst2aNref}"
+                visible="{= !${treeData>isHeader} }"
+                type="Number"
+                width="100%"
+                placeholder="0.00"
+                textAlign="End"
+                change="onGst2aNrefChange"
+            />
+        </m:VBox>
+    </table:template>
+</table:Column>
                     <!-- ================= Amount already claimed in approval notes ================= -->
                     <table:Column
                         id="colAmtAlreadyClaimed"
@@ -528,7 +528,7 @@
                         label="Amount approved by Project Manager"
                         width="200px"
                         hAlign="End"
-                        filterProperty="PmApprAmt"
+                        filterProperty="ApprAmt"
                     >
                         <!-- <m:Input
                                 value="{treeData>PmApprAmt}"
@@ -544,6 +544,31 @@
                                 visible="{= !${treeData>isHeader} }"
                             />
                         </table:template>
+                    </table:Column>
+
+                    <!-- ================= Amount approved by HOD ================= -->
+                    <table:Column
+                        id="colHodApprAmt"
+                        label="Amount approved by HOD"
+                        width="200px"
+                        hAlign="End"
+                        filterProperty="HodApprAmt"
+                    >
+                        <m:Input
+                            value="{path: 'treeData>TotalLiability',
+                mode: 'OneWay'}"
+                            visible="{= !${treeData>isHeader} }"
+                            type="Number"
+                            placeholder="0.00"
+                            textAlign="End"
+                            change="onPmApprAmountChange"
+                        />
+                        <!-- <table:template>
+                            <m:Text
+                                text="{treeData>PmApprAmt}"
+                                visible="{= !${treeData>isHeader} }"
+                            />
+                        </table:template> -->
                     </table:Column>
 
                     <!-- ================= PM Status (Header=OverallStatus, Item=PmApprStatus) ================= -->

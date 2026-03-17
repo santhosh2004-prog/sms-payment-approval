@@ -1677,7 +1677,7 @@ sap.ui.define(
 
       if (!oSelectedItem.isHeader) {
 
-        var sItemKey = oSelectedItem.ApprovalNo + "_" + oSelectedItem.ItemNum;
+        var sItemKey = oSelectedItem.DocNum + "_" + oSelectedItem.ItemNum;
 
         if (!oProcessedItems.has(sItemKey)) {
 

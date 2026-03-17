@@ -1654,7 +1654,7 @@ onGst2aRefChange: function (oEvent) {
             if (fNewValue < 0) {
                 fNewValue = 0;
                 oInput.setValue(fNewValue.toFixed(2));
-                MessageToast.show("PM Approved Amount cannot be negative");
+                MessageToast.show("Hod Approved Amount cannot be negative");
                 return;
             }
 
@@ -1663,10 +1663,10 @@ onGst2aRefChange: function (oEvent) {
             oInput.setValue(sFormattedValue);
 
             // Update the tree data model
-            oContext.getModel().setProperty(oContext.getPath() + "/PmApprAmt", sFormattedValue);
+            oContext.getModel().setProperty(oContext.getPath() + "/HodApprAmt", sFormattedValue);
 
-            console.log("PM Approved Amount updated in tree data model:", sFormattedValue);
-            MessageToast.show("PM Approved Amount updated to ₹" + fNewValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            console.log("HOD Approved Amount updated in tree data model:", sFormattedValue);
+            MessageToast.show("HOD Approved Amount updated to ₹" + fNewValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
         },
 
         onRemarksChange: function (oEvent) {
@@ -1715,7 +1715,7 @@ onGst2aRefChange: function (oEvent) {
 
       if (!oSelectedItem.isHeader) {
 
-        var sItemKey = oSelectedItem.ApprovalNo + "_" + oSelectedItem.ItemNum;
+        var sItemKey = oSelectedItem.DocNum + "_" + oSelectedItem.ItemNum;
 
         if (!oProcessedItems.has(sItemKey)) {
 

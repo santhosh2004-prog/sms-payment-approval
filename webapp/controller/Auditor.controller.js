@@ -1668,6 +1668,73 @@ sap.ui.define(
               }),
           );
         },
+        onGst2aRefChange: function (oEvent) {
+    var oInput = oEvent.getSource();
+    var oContext = oInput.getBindingContext("treeData");
+    var sNewValue = oEvent.getParameter("value");
+
+    // Validate numeric input
+    var fNewValue = parseFloat(sNewValue) || 0;
+    if (fNewValue < 0) {
+        fNewValue = 0;
+        oInput.setValue(fNewValue.toFixed(2));
+        MessageToast.show("GST 2A Reflected Amount cannot be negative");
+        return;
+    }
+
+    // Format to 2 decimal places
+    var sFormattedValue = fNewValue.toFixed(2);
+    oInput.setValue(sFormattedValue);
+
+    // Update tree data model
+    oContext.getModel().setProperty(
+        oContext.getPath() + "/Gst2aRef",
+        sFormattedValue
+    );
+
+    console.log("GST 2A Reflected updated:", sFormattedValue);
+
+    MessageToast.show(
+        "GST 2A Reflected updated to ₹" +
+        fNewValue.toLocaleString("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })
+    );
+},onGst2aNrefChange: function (oEvent) {
+    var oInput = oEvent.getSource();
+    var oContext = oInput.getBindingContext("treeData");
+    var sNewValue = oEvent.getParameter("value");
+
+    // Validate numeric input
+    var fNewValue = parseFloat(sNewValue) || 0;
+    if (fNewValue < 0) {
+        fNewValue = 0;
+        oInput.setValue(fNewValue.toFixed(2));
+        MessageToast.show("GST 2A Not Reflected Amount cannot be negative");
+        return;
+    }
+
+    // Format to 2 decimal places
+    var sFormattedValue = fNewValue.toFixed(2);
+    oInput.setValue(sFormattedValue);
+
+    // Update tree data model
+    oContext.getModel().setProperty(
+        oContext.getPath() + "/Gst2aNref",
+        sFormattedValue
+    );
+
+    console.log("GST 2A Not Reflected updated:", sFormattedValue);
+
+    MessageToast.show(
+        "GST 2A Not Reflected updated to ₹" +
+        fNewValue.toLocaleString("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })
+    );
+},
 
         onPmApprAmountChange: function (oEvent) {
           var oInput = oEvent.getSource();
@@ -1753,7 +1820,7 @@ sap.ui.define(
 
       if (!oSelectedItem.isHeader) {
 
-        var sItemKey = oSelectedItem.ApprovalNo + "_" + oSelectedItem.ItemNum;
+        var sItemKey = oSelectedItem.DocNum + "_" + oSelectedItem.ItemNum;
 
         if (!oProcessedItems.has(sItemKey)) {
 

@@ -305,7 +305,7 @@
                     <!-- ================= Gross Amount (Header + Item) ================= -->
                     <table:Column
                         id="colGrossAmt"
-                        label="Gross Amount"
+                        label="Base Amount"
                         width="130px"
                         hAlign="End"
                         filterProperty="TotalBaseAmt"
@@ -526,7 +526,8 @@
                     >
                         <table:template>
                             <m:Input
-                                value="{treeData>CfoApprAmt}"
+                                value="{path: 'treeData>TotalLiability',
+                mode: 'OneWay'}"
                                 visible="{= !${treeData>isHeader} }"
                                 type="Number"
                                 placeholder="0.00"
